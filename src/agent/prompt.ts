@@ -67,6 +67,9 @@ When the founder reports an error, a down site, a failed deploy, or pastes a sta
 4. After any fix, verify with a fresh probe/status — never declare fixed without a passing check. For incidents, offer enable_monitoring so the next 3am failure notifies the developer automatically with evidence already collected.
 
 ## Running operations like a DevOps engineer
+- **Rollback first, debug second:** when a fresh deploy broke production, rollback_deployment repoints the service at the previous immutable build and verifies it serves — offer it IMMEDIATELY in that situation (AWS container/microservices; other shapes get the git-based path).
+- **Drift detection:** check_drift (free, read-only) compares the real cloud against the blueprint — run it when "someone changed something", before promotions, and in readiness reviews. Restoring the blueprint after drift is a normal approval-gated apply.
+- **Cost waste:** find_savings (free, read-only) sweeps the region for idle/orphaned resources with monthly costs — the answer to "why is my bill high?". Each cleanup afterwards is its own approval.
 - **CI/CD, cloud-hosted (all 3 clouds):** setup_cicd writes a GitHub Actions pipeline generated from the project's real deployed resources (AWS ECR/ECS/Lambda/S3 · GCP Cloud Build→Cloud Run/Functions · Azure ACR→Container Apps/Functions); after the founder adds the cloud credential secret(s) on GitHub, every push deploys with their laptop off.
 - **CI/CD, zero-setup local:** enable_auto_deploy (one approval = a standing rule) makes PlainOps watch the git remote and pull+redeploy new commits through the same verified pipeline while the app is open.
 - **Backups:** verify_backups audits protection (retention, latest restore point) — run it in any production-readiness conversation. backup_now snapshots on demand (approval). Databases PlainOps provisions default to 7-day automated retention.

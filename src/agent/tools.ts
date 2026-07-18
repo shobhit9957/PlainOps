@@ -20,6 +20,7 @@ import { whoAmI } from '../aws.js';
 import { generateWorkflow, writeWorkflow, setMonitoring, setAutoDeploy, isGitRepo, watchtowerRequiresChannel, createStagingTwin, stagingNameFor, redeployProject, recordDeployedCommit, gitHead } from '../cicd.js';
 import { verifyBackups, backupNow, runDrDrill, datastoreOf } from '../backup.js';
 import { setupCustomDomain, isValidDomain } from '../dns.js';
+import { rollbackDeployment, checkDrift, findSavings } from '../ops.js';
 import { notifyDeveloper, anyChannelConfigured, configuredChannels } from '../notify.js';
 import { auditLog } from '../audit.js';
 import { emitBus } from '../bus.js';
@@ -345,6 +346,30 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
       },
       additionalProperties: false,
     },
+  },
+  {
+    name: 'rollback_deployment',
+    description:
+      "Roll a broken deploy BACK to the previous build — the fastest incident fix there is. Every PlainOps build pushes an immutable v<timestamp> image, so on AWS container/microservices stacks this repoints the service at the previous image, waits for stability, and verifies the URL serves. For microservices pass the service name (or 'all'). REQUIRES founder click-approval. Serverless/static get honest git-based guidance instead (no retained artifacts). Use IMMEDIATELY when a fresh deploy broke production — roll back first, debug after.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        service: { type: 'string', description: "Microservices only: which service to roll back, or 'all'." },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'check_drift',
+    description:
+      "Infrastructure drift detection: compare what's REALLY in the cloud against the reviewed blueprint (read-only `tofu plan`). Finds manual console edits, out-of-band changes, and deleted resources before they bite. Free and read-only — run it when the founder says 'someone changed something', before promotions, and in production-readiness reviews. If drift exists I report exactly which resources changed and offer to restore the blueprint (that re-apply needs approval).",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'find_savings',
+    description:
+      "Cost-waste hunt (read-only) across this project's AWS region: unattached EBS volumes, orphaned Elastic IPs, load balancers with zero healthy targets, stopped instances still billing storage, forgotten NAT gateways — each with an estimated monthly cost. Run when the founder asks 'why is my bill high?' or wants to save money. Cleanups I propose afterwards each get their own approval.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'setup_custom_domain',
@@ -1060,6 +1085,38 @@ async function dispatchRaw(
           return `Promotion failed: ${(e as Error).message}. Production may be mid-rollout — run_diagnosis will show its real state.`;
         }
       });
+    }
+
+    case 'rollback_deployment': {
+      const verdict = await requestApproval({
+        type: 'deploy',
+        projectName: project.name,
+        summary: `ROLL BACK "${project.name}" to the previous build${input.service ? ` (service: ${String(input.service)})` : ''} and verify it serves.`,
+      });
+      if (verdict !== 'approved') return 'The founder did not approve the rollback. Nothing was changed.';
+      return withActionLock(async () => {
+        try {
+          return await rollbackDeployment(project, input.service ? String(input.service) : undefined, emitLog);
+        } catch (e) {
+          return `Rollback failed: ${(e as Error).message}`;
+        }
+      });
+    }
+
+    case 'check_drift': {
+      try {
+        return await checkDrift(project, emitLog);
+      } catch (e) {
+        return `Drift check failed: ${(e as Error).message}`;
+      }
+    }
+
+    case 'find_savings': {
+      try {
+        return await findSavings(project.region);
+      } catch (e) {
+        return `Savings scan failed: ${(e as Error).message}`;
+      }
     }
 
     case 'setup_custom_domain': {
