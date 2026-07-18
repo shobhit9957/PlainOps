@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "plainops-demo",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["cross-env", "PLAINOPS_DEMO=1", "PLAINOPS_NO_OPEN=1", "PLAINOPS_HOME=.plainops-demo", "tsx", "src/index.ts"],
+      "port": 7717
+    }
+  ]
+}

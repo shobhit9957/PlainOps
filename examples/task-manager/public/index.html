@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Task Manager · Deployed by PLAINOPS</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: radial-gradient(1200px 600px at 50% -10%, #16233f, #0b1120 60%);
+        color: #e2e8f0; min-height: 100vh; padding: 40px 16px;
+      }
+      .wrap { max-width: 680px; margin: 0 auto; }
+      header { text-align: center; margin-bottom: 28px; }
+      h1 { margin: 0; font-size: 2rem; }
+      .sub { color: #94a3b8; margin-top: 6px; font-size: 0.9rem; }
+      .badge { display: inline-block; margin-top: 10px; padding: 4px 12px; border-radius: 999px;
+               border: 1px solid #263354; font-size: 0.78rem; background: #131c31; }
+      .badge.ok { color: #4ade80; } .badge.wait { color: #fbbf24; }
+      form.add { display: flex; gap: 8px; margin-bottom: 20px; }
+      input, textarea, button { font-family: inherit; font-size: 0.95rem; }
+      input[type=text] {
+        flex: 1; background: #131c31; border: 1px solid #263354; border-radius: 10px;
+        padding: 12px 14px; color: #e2e8f0;
+      }
+      button {
+        cursor: pointer; border: none; border-radius: 10px; padding: 12px 18px;
+        background: #38bdf8; color: #06121f; font-weight: 600;
+      }
+      button:hover { filter: brightness(1.08); }
+      ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+      li { background: #131c31; border: 1px solid #263354; border-radius: 12px; padding: 14px 16px;
+           display: flex; align-items: center; gap: 12px; }
+      li.done .title { text-decoration: line-through; color: #64748b; }
+      .title { flex: 1; font-weight: 600; }
+      .title small { display: block; font-weight: 400; color: #94a3b8; margin-top: 2px; }
+      .chk { width: 22px; height: 22px; cursor: pointer; accent-color: #4ade80; }
+      .del { background: transparent; color: #f87171; border: 1px solid #f87171; padding: 6px 12px; }
+      .empty { text-align: center; color: #64748b; padding: 30px; }
+      footer { text-align: center; color: #475569; font-size: 0.78rem; margin-top: 28px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>✓ Task Manager</h1>
+        <div class="sub">A full CRUD app on your own AWS — Express + PostgreSQL (RDS)</div>
+        <div id="dbBadge" class="badge wait">checking database…</div>
+      </header>
+
+      <form class="add" id="addForm">
+        <input type="text" id="title" placeholder="Add a task and press Enter…" autocomplete="off" />
+        <button type="submit">Add</button>
+      </form>
+
+      <ul id="list"></ul>
+      <div id="empty" class="empty" style="display:none">No tasks yet — add your first one above.</div>
+
+      <footer>Deployed by PLAINOPS ⚓ · data stored in your RDS database</footer>
+    </div>
+
+    <script>
+      const list = document.getElementById('list');
+      const empty = document.getElementById('empty');
+      const badge = document.getElementById('dbBadge');
+
+      async function api(method, url, body) {
+        const res = await fetch(url, {
+          method,
+          headers: body ? { 'Content-Type': 'application/json' } : undefined,
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        if (res.status === 204) return null;
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || res.statusText);
+        return data;
+      }
+
+      function render(tasks) {
+        list.innerHTML = '';
+        empty.style.display = tasks.length ? 'none' : 'block';
+        for (const t of tasks) {
+          const li = document.createElement('li');
+          if (t.done) li.className = 'done';
+          const chk = document.createElement('input');
+          chk.type = 'checkbox'; chk.className = 'chk'; chk.checked = t.done;
+          chk.onchange = async () => { await api('PUT', '/api/tasks/' + t.id, { done: chk.checked }); load(); };
+          const title = document.createElement('div');
+          title.className = 'title';
+          title.textContent = t.title;
+          if (t.description) { const s = document.createElement('small'); s.textContent = t.description; title.appendChild(s); }
+          const del = document.createElement('button');
+          del.className = 'del'; del.textContent = 'Delete';
+          del.onclick = async () => { await api('DELETE', '/api/tasks/' + t.id); load(); };
+          li.append(chk, title, del);
+          list.appendChild(li);
+        }
+      }
+
+      async function load() {
+        try {
+          const tasks = await api('GET', '/api/tasks');
+          render(tasks);
+          badge.className = 'badge ok'; badge.textContent = 'database connected ✓';
+        } catch (e) {
+          badge.className = 'badge wait'; badge.textContent = 'database starting… (' + e.message + ')';
+          setTimeout(load, 4000);
+        }
+      }
+
+      document.getElementById('addForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = document.getElementById('title');
+        const title = input.value.trim();
+        if (!title) return;
+        input.value = '';
+        try { await api('POST', '/api/tasks', { title }); load(); }
+        catch (err) { badge.className = 'badge wait'; badge.textContent = err.message; }
+      });
+
+      load();
+    </script>
+  </body>
+</html>

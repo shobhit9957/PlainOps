@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Deployed by PLAINOPS</title>
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; background: #0b1120; color: #e2e8f0;
+             display: grid; place-items: center; min-height: 100vh; text-align: center; }
+      .card { padding: 3rem; }
+      h1 { font-size: 3rem; margin: 0 0 1rem; }
+      code { background: #1e293b; padding: .2rem .5rem; border-radius: 6px; color: #7dd3fc; }
+      #out { margin-top: 1.5rem; color: #94a3b8; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>🚢 It's live</h1>
+      <p>This app was deployed to your own AWS account by <strong>PLAINOPS</strong>.</p>
+      <p id="out">Calling <code>/api/hello</code>…</p>
+    </div>
+    <script>
+      fetch('/api/hello')
+        .then((r) => r.json())
+        .then((d) => { document.getElementById('out').textContent = d.msg + ' (host: ' + d.host + ')'; })
+        .catch(() => { document.getElementById('out').textContent = 'API call failed.'; });
+    </script>
+  </body>
+</html>
