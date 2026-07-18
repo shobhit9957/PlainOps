@@ -19,6 +19,7 @@ import { generateDockerfile } from '../analyzer.js';
 import { whoAmI } from '../aws.js';
 import { generateWorkflow, writeWorkflow, setMonitoring, setAutoDeploy, isGitRepo, watchtowerRequiresChannel, createStagingTwin, stagingNameFor, redeployProject, recordDeployedCommit, gitHead } from '../cicd.js';
 import { verifyBackups, backupNow, runDrDrill, datastoreOf } from '../backup.js';
+import { setupCustomDomain, isValidDomain } from '../dns.js';
 import { notifyDeveloper, anyChannelConfigured, configuredChannels } from '../notify.js';
 import { auditLog } from '../audit.js';
 import { emitBus } from '../bus.js';
@@ -342,6 +343,19 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
         enabled: { type: 'boolean', description: 'true to enable (default), false to disable.' },
         intervalMinutes: { type: 'number', description: 'Probe interval (default 2, min 1).' },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'setup_custom_domain',
+    description:
+      "Connect the founder's own domain to this project WITH HTTPS, on the cloud's native DNS — one guided pipeline. AWS: Route 53 zone → ACM certificate (DNS-validated) → HTTPS :443 listener on the load balancer → alias record (container/microservices stacks). GCP: Cloud Run domain mapping with a Google-managed certificate + Cloud DNS records. Azure: Container Apps hostname + free managed certificate + Azure DNS records. Hard precondition: the domain's DNS zone must be hosted in that cloud's DNS service (Route 53 / Cloud DNS / Azure DNS) or its nameservers delegated there — the tool detects this and returns the exact records/steps when it isn't, instead of failing blind. REQUIRES founder click-approval. Certificates and DNS need minutes to propagate — the result says so honestly. For one-off record changes (an MX, a TXT, a subdomain pointer) use the cloud CLIs directly instead.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        domain: { type: 'string', description: 'The full domain to connect, e.g. app.mydatingapp.com or mydatingapp.com.' },
+      },
+      required: ['domain'],
       additionalProperties: false,
     },
   },
@@ -1044,6 +1058,28 @@ async function dispatchRaw(
           return `Promoted to production — LIVE and verified at ${url}${drift}`;
         } catch (e) {
           return `Promotion failed: ${(e as Error).message}. Production may be mid-rollout — run_diagnosis will show its real state.`;
+        }
+      });
+    }
+
+    case 'setup_custom_domain': {
+      const domain = String(input.domain ?? '').trim().toLowerCase();
+      if (!isValidDomain(domain)) return `"${input.domain}" doesn't look like a valid domain — expected something like app.example.com.`;
+      const url = project.siteUrl ?? project.outputs?.app_url ?? project.outputs?.gateway_url ?? project.outputs?.api_url;
+      if (!url) return 'Deploy the project first — a domain needs something live to point at.';
+      const cloudLabel = (project.cloud ?? 'aws') === 'gcp' ? 'Google Cloud' : (project.cloud ?? 'aws') === 'azure' ? 'Azure' : 'AWS';
+      const verdict = await requestApproval({
+        type: 'action',
+        projectName: project.name,
+        summary: `Connect https://${domain} to "${project.name}" on ${cloudLabel}: create the TLS certificate, DNS records, and (on AWS) an HTTPS :443 listener on your load balancer.`,
+        costText: 'Certificates are free on all three clouds; a Route 53 hosted zone bills $0.50/month if one has to exist.',
+      });
+      if (verdict !== 'approved') return 'The founder did not approve the domain setup. Nothing was changed.';
+      return withActionLock(async () => {
+        try {
+          return await setupCustomDomain(project, domain, emitLog);
+        } catch (e) {
+          return `Domain setup stopped: ${(e as Error).message}`;
         }
       });
     }
