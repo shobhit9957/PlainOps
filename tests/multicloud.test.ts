@@ -55,3 +55,15 @@ describe('deployGcp preflight', () => {
     await expect(deployGcp('nope', 'app', {}, () => {})).rejects.toThrow(/Unknown project/);
   });
 });
+
+describe('datastoreOf', () => {
+  it('detects each datastore shape correctly', async () => {
+    const { datastoreOf } = await import('../src/backup.js');
+    const mk = (o: Record<string, unknown>) => ({ name: 'x', region: 'r', status: 'live', createdAt: 'now', ...o }) as import('../src/state.js').Project;
+    expect(datastoreOf(mk({ siteBucket: 'b' }))).toEqual({ kind: 's3', bucket: 'b' });
+    expect(datastoreOf(mk({ outputs: { orders_table: 't' } }))).toEqual({ kind: 'dynamo', table: 't' });
+    expect(datastoreOf(mk({ outputs: { docdb_endpoint: 'e' } }))).toEqual({ kind: 'docdb', id: 'po-x' });
+    expect(datastoreOf(mk({ outputs: { db_endpoint: 'e' }, blueprint: { withDatabase: true } }))).toEqual({ kind: 'rds', id: 'po-x' });
+    expect(datastoreOf(mk({ outputs: { app_url: 'u' } }))).toEqual({ kind: 'none' });
+  });
+});

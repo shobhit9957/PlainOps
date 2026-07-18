@@ -435,7 +435,7 @@ resource "aws_db_instance" "main" {
   publicly_accessible           = false
   skip_final_snapshot           = true
   apply_immediately             = true
-  backup_retention_period       = 1
+  backup_retention_period       = 7
   performance_insights_enabled  = false
 }
 

@@ -271,7 +271,7 @@ resource "aws_docdb_cluster" "main" {
   db_cluster_parameter_group_name = aws_docdb_cluster_parameter_group.main[0].name
   skip_final_snapshot             = true
   apply_immediately               = true
-  backup_retention_period         = 1
+  backup_retention_period         = 7
 }
 
 resource "aws_docdb_cluster_instance" "main" {

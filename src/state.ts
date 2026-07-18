@@ -30,6 +30,8 @@ export interface Project {
   monitor?: { enabled: boolean; intervalMin: number };
   /** Standing rule (enabled via one approval): poll git remote, redeploy on new commits. */
   autoDeploy?: { enabled: boolean; intervalMin: number };
+  /** Commit hash the last successful deploy shipped (drives staging→prod promotion). */
+  deployedCommit?: string;
 }
 
 export interface AppState {

@@ -48,10 +48,11 @@ describe('generateWorkflow', () => {
     expect(plan.yaml).toContain('po-demo-${{ matrix.service }}:live');
   });
 
-  it('refuses clearly when nothing is deployed yet, and for non-AWS clouds', async () => {
+  it('refuses clearly when nothing is deployed yet, on every cloud', async () => {
     const { generateWorkflow } = await import('../src/cicd.js');
     expect(() => generateWorkflow(base({}))).toThrow(/deploy once/i);
-    expect(() => generateWorkflow(base({ cloud: 'gcp', outputs: { app_url: 'x' } }))).toThrow(/AWS projects/);
+    expect(() => generateWorkflow(base({ cloud: 'gcp', outputs: { app_url: 'x' } }))).toThrow(/deploy once/i);
+    expect(() => generateWorkflow(base({ cloud: 'azure', outputs: { app_url: 'x' } }))).toThrow(/deploy once/i);
   });
 });
 
@@ -83,5 +84,78 @@ describe('watcher config persistence', () => {
     expect(p.autoDeploy).toEqual({ enabled: true, intervalMin: 7 });
     setMonitoring('w', false);
     expect(getProject('w')!.monitor?.enabled).toBe(false);
+  });
+});
+
+describe('generateWorkflow — GCP and Azure', () => {
+  it('gcp app → Cloud Build + Cloud Run roll with real names and the SA-key secret', async () => {
+    const { generateWorkflow } = await import('../src/cicd.js');
+    const plan = generateWorkflow(base({
+      cloud: 'gcp', cloudTarget: 'acme-123', region: 'asia-south1', archetype: 'app',
+      outputs: { artifact_repo_url: 'asia-south1-docker.pkg.dev/acme-123/po-demo', service_name: 'po-demo', app_url: 'x' },
+    }));
+    expect(plan.secretsNeeded).toEqual(['GCP_SA_KEY']);
+    expect(plan.yaml).toContain('google-github-actions/auth@v2');
+    expect(plan.yaml).toContain('gcloud builds submit --tag asia-south1-docker.pkg.dev/acme-123/po-demo/app:live');
+    expect(plan.yaml).toContain('gcloud run deploy po-demo');
+  });
+
+  it('gcp microservices → matrix + per-service Cloud Run names', async () => {
+    const { generateWorkflow } = await import('../src/cicd.js');
+    const plan = generateWorkflow(base({
+      cloud: 'gcp', cloudTarget: 'acme-123', archetype: 'microservices',
+      outputs: { artifact_repo_url: 'r', service_urls: JSON.stringify({ gateway: 'u1', users: 'u2' }) },
+    }));
+    expect(plan.yaml).toContain('service: [gateway, users]');
+    expect(plan.yaml).toContain('gcloud run deploy po-demo-${{ matrix.service }}');
+  });
+
+  it('gcp serverless → redeploys both functions with the topic trigger', async () => {
+    const { generateWorkflow } = await import('../src/cicd.js');
+    const plan = generateWorkflow(base({ cloud: 'gcp', cloudTarget: 'acme-123', archetype: 'serverless', outputs: { api_url: 'x' } }));
+    expect(plan.yaml).toContain('po-demo-api');
+    expect(plan.yaml).toContain('--trigger-topic po-demo-tasks');
+  });
+
+  it('azure app → ACR build + containerapp update with the credentials secret', async () => {
+    const { generateWorkflow } = await import('../src/cicd.js');
+    const plan = generateWorkflow(base({
+      cloud: 'azure', archetype: 'app',
+      outputs: { acr_name: 'podemoacr1', acr_login_server: 'podemoacr1.azurecr.io', resource_group: 'po-demo', app_url: 'x' },
+    }));
+    expect(plan.secretsNeeded).toEqual(['AZURE_CREDENTIALS']);
+    expect(plan.yaml).toContain('az acr build --registry podemoacr1 --image app:live .');
+    expect(plan.yaml).toContain('az containerapp update --name po-demo --resource-group po-demo');
+  });
+
+  it('azure serverless → zip deploy to the real function app', async () => {
+    const { generateWorkflow } = await import('../src/cicd.js');
+    const plan = generateWorkflow(base({
+      cloud: 'azure', archetype: 'serverless',
+      outputs: { function_app_name: 'po-demo-fn-abc123', resource_group: 'po-demo', api_base_url: 'x' },
+    }));
+    expect(plan.yaml).toContain('config-zip --resource-group po-demo --name po-demo-fn-abc123');
+  });
+});
+
+describe('environments / promotion helpers', () => {
+  it('creates a staging twin sharing cloud/region/repo with its own name', async () => {
+    const { createStagingTwin, stagingNameFor } = await import('../src/cicd.js');
+    const { upsertProject, getProject } = await import('../src/state.js');
+    upsertProject(base({ name: 'dating-app', cloud: 'aws', repoPath: 'C:/code/dating', archetype: 'microservices' }));
+    const twin = createStagingTwin(getProject('dating-app')!);
+    expect(twin.name).toBe(stagingNameFor('dating-app'));
+    expect(twin.name).toBe('dating-app-stg');
+    expect(twin.repoPath).toBe('C:/code/dating');
+    expect(twin.archetype).toBe('microservices');
+    expect(twin.status).toBe('new');
+    // Idempotent — a second call returns the same twin, not a duplicate.
+    expect(createStagingTwin(getProject('dating-app')!).name).toBe(twin.name);
+  });
+
+  it('staging names stay within the 20-char project limit', async () => {
+    const { stagingNameFor } = await import('../src/cicd.js');
+    expect(stagingNameFor('a-very-long-project-name').length).toBeLessThanOrEqual(19);
+    expect(/^[a-z][a-z0-9-]*$/.test(stagingNameFor('a-very-long-project-name'))).toBe(true);
   });
 });

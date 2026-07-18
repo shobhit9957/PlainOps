@@ -17,7 +17,8 @@ import { estimateCloud } from '../estimator.js';
 import { collectDiagnosis } from '../diagnosis.js';
 import { generateDockerfile } from '../analyzer.js';
 import { whoAmI } from '../aws.js';
-import { generateWorkflow, writeWorkflow, setMonitoring, setAutoDeploy, isGitRepo, watchtowerRequiresChannel } from '../cicd.js';
+import { generateWorkflow, writeWorkflow, setMonitoring, setAutoDeploy, isGitRepo, watchtowerRequiresChannel, createStagingTwin, stagingNameFor, redeployProject, recordDeployedCommit, gitHead } from '../cicd.js';
+import { verifyBackups, backupNow, runDrDrill, datastoreOf } from '../backup.js';
 import { notifyDeveloper, anyChannelConfigured, configuredChannels } from '../notify.js';
 import { auditLog } from '../audit.js';
 import { emitBus } from '../bus.js';
@@ -279,8 +280,44 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
     name: 'setup_cicd',
     description:
-      "Set up deploy-on-push CI/CD: writes a GitHub Actions workflow into the project's repo, generated from the REAL deployed resource names (ECR repo, cluster/service, Lambda names, or site bucket — per the project's shape). After the founder pushes it and adds two AWS secrets to the GitHub repo, every push to main ships automatically via GitHub's cloud — no laptop needed. REQUIRES founder click-approval (it writes into their repo). The project must be deployed once first. AWS projects only for now.",
+      "Set up deploy-on-push CI/CD on ANY of the three clouds: writes a GitHub Actions workflow into the project's repo, generated from the REAL deployed resource names (AWS: ECR/cluster/service, Lambdas, or site bucket · GCP: Cloud Build → Cloud Run / Cloud Functions · Azure: ACR Tasks → Container Apps / Function App zip-deploy). After the founder pushes it and adds the cloud credential secret(s) to the GitHub repo, every push to main ships automatically via GitHub's cloud — no laptop needed. REQUIRES founder click-approval (it writes into their repo). The project must be deployed once first.",
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'verify_backups',
+    description:
+      "Read-only backup audit for this project's datastore: is automated backup ON, what's the retention, how recent is the latest snapshot/restore point (RDS Postgres, DocumentDB, DynamoDB PITR, S3 versioning; Cloud SQL on GCP; PostgreSQL flexible on Azure). Call when the founder asks 'am I backed up?', before a risky change, and as part of any production-readiness review.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'backup_now',
+    description:
+      "Take an on-demand backup of the project's datastore right now (RDS/DocumentDB snapshot, DynamoDB backup + ensure point-in-time recovery, S3 versioning on, Cloud SQL backup on GCP; Azure PG runs continuous backups automatically — the tool explains that). REQUIRES founder click-approval. Use before deploys the founder is nervous about, schema changes, or teardown.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'run_dr_drill',
+    description:
+      "Disaster-recovery DRILL — the test most teams never run: restore the LATEST snapshot/backup into a TEMPORARY instance, prove it actually comes up ('available'/'ACTIVE'), then delete the temporary copy. Verifies backups are restorable, not just present. Costs cents (minutes of the smallest instance); RDS/DocumentDB drills take 10–30 min, DynamoDB a few minutes. AWS projects only in this version. REQUIRES founder click-approval. Run backup_now first if no snapshot exists yet.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'setup_environments',
+    description:
+      "Create a STAGING twin of this project (same cloud/region/repo/shape, its own isolated stack named <name>-stg). Flow the founder gets: deploy to staging → test the staging URL → promote_to_production ships the exact validated commit. Creates only a project record — nothing is billed until staging is deployed. Free.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'promote_to_production',
+    description:
+      "Promote what staging validated to PRODUCTION: verifies the staging twin is live, confirms the repo's current commit matches the one staging deployed (warns plainly if the repo moved ahead — promotion then ships current HEAD), and redeploys production through the same verified pipeline. REQUIRES founder click-approval. Call from the PRODUCTION project (the one without -stg). Production must be provisioned/deployed once before its first promotion.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        acceptNewerCommit: { type: 'boolean', description: 'Set true only after the founder explicitly accepts promoting a commit newer than what staging tested.' },
+      },
+      additionalProperties: false,
+    },
   },
   {
     name: 'enable_auto_deploy',
@@ -500,6 +537,7 @@ async function dispatchRaw(
       return withActionLock(async () => {
         try {
           const url = await orchestrator.deployApp(project.name, emitLog, deps);
+          await recordDeployedCommit(project.name);
           return `Deployed successfully. The app is LIVE at ${url}`;
         } catch (e) {
           return `Deployment failed: ${(e as Error).message}`;
@@ -546,6 +584,7 @@ async function dispatchRaw(
           // Personalize the starter page with the project's region.
           if (usingStarter) sourceDir = materializeStarter(project.region);
           const url = await orchestrator.deployStatic(project.name, sourceDir, emitLog);
+          await recordDeployedCommit(project.name);
           return `Static website is LIVE at ${url}`;
         } catch (e) {
           return `Static site deployment failed: ${(e as Error).message}`;
@@ -600,6 +639,7 @@ async function dispatchRaw(
       return withActionLock(async () => {
         try {
           const url = await deployMicroservices(project.name, sourceDir, emitLog);
+          await recordDeployedCommit(project.name);
           return `The microservices app is LIVE at ${url}`;
         } catch (e) {
           return `Microservices deployment failed: ${(e as Error).message}`;
@@ -632,6 +672,7 @@ async function dispatchRaw(
       return withActionLock(async () => {
         try {
           const url = await deployServerless(project.name, sourceDir, emitLog);
+          await recordDeployedCommit(project.name);
           return `Serverless pipeline is LIVE at ${url}`;
         } catch (e) {
           return `Serverless deployment failed: ${(e as Error).message}`;
@@ -787,6 +828,7 @@ async function dispatchRaw(
             cloud === 'gcp'
               ? await deployGcp(project.name, archetype, opts, emitLog)
               : await deployAzure(project.name, archetype, opts, emitLog);
+          await recordDeployedCommit(project.name);
           return `Deployed to ${cloudPretty} — LIVE and verified at ${url}`;
         } catch (e) {
           return `${cloudPretty} deployment failed: ${(e as Error).message}`;
@@ -905,6 +947,105 @@ async function dispatchRaw(
       setMonitoring(project.name, true, interval);
       const hint = watchtowerRequiresChannel();
       return `Watchtower is ON: probing ${url} every ${interval} min while the app is open. After 2 consecutive failures I automatically collect a full diagnosis and notify the developer.${hint ? `\n${hint}` : ''}`;
+    }
+
+    case 'verify_backups': {
+      return await verifyBackups(project);
+    }
+
+    case 'backup_now': {
+      const ds = datastoreOf(project);
+      if (ds.kind === 'none') return 'Nothing to snapshot — this project has no datastore (the git repo is the source of truth).';
+      const verdict = await requestApproval({
+        type: 'action',
+        projectName: project.name,
+        summary: `Take an on-demand backup of "${project.name}"'s datastore now (${ds.kind === 's3' ? 'enable S3 versioning' : ds.kind.toUpperCase() + ' snapshot'}).`,
+        costText: 'Backup storage beyond the free allowance bills at cents/GB-month.',
+      });
+      if (verdict !== 'approved') return 'The founder did not approve the backup. Nothing was created.';
+      try {
+        return await backupNow(project);
+      } catch (e) {
+        return `Backup failed: ${(e as Error).message}`;
+      }
+    }
+
+    case 'run_dr_drill': {
+      const verdict = await requestApproval({
+        type: 'action',
+        projectName: project.name,
+        summary: `DISASTER-RECOVERY DRILL for "${project.name}": restore the latest backup into a TEMPORARY instance, verify it comes up, then delete it. Proves your backups actually restore.`,
+        costText: 'A few cents (smallest instance for minutes). RDS/DocumentDB drills take 10–30 min.',
+      });
+      if (verdict !== 'approved') return 'The founder did not approve the drill. Nothing was created.';
+      return withActionLock(async () => {
+        try {
+          return await runDrDrill(project, emitLog);
+        } catch (e) {
+          return `DR drill errored: ${(e as Error).message}. Any temporary restore resources may need manual cleanup — I can check with aws_cli.`;
+        }
+      });
+    }
+
+    case 'setup_environments': {
+      if (project.name.endsWith('-stg')) return 'This IS the staging project. Switch to the production project to manage environments.';
+      const twin = createStagingTwin(project);
+      return JSON.stringify(
+        {
+          staging: twin.name,
+          status: twin.status,
+          flow: [
+            `1. Deploy to staging: switch to project "${twin.name}" (project picker, top bar) and deploy there — or tell me and I'll run it.`,
+            '2. Test the staging URL until you are happy.',
+            `3. Back on "${project.name}", say "promote to production" — I verify staging is live and ship the exact commit it validated.`,
+          ],
+          note: 'Staging runs a full isolated copy of the infrastructure — roughly doubles the monthly cost while it exists; destroy it any time.',
+        },
+        null,
+        2,
+      );
+    }
+
+    case 'promote_to_production': {
+      if (project.name.endsWith('-stg')) return 'Run promotion from the PRODUCTION project (without -stg) — it pulls from this staging twin.';
+      const staging = getProject(stagingNameFor(project.name));
+      if (!staging) return `No staging twin exists yet — run setup_environments first (it creates "${stagingNameFor(project.name)}").`;
+      const stagingUrl = staging.siteUrl ?? staging.outputs?.app_url ?? staging.outputs?.gateway_url ?? staging.outputs?.api_url;
+      if (!stagingUrl || staging.status !== 'live') return `Staging ("${staging.name}") is not live yet — deploy and verify it there first.`;
+      const probe = await orchestrator.validateLive(stagingUrl, deps, undefined, 2, 3000);
+      if (!probe.ok) return `Staging is marked live but ${stagingUrl} is NOT serving right now (${probe.detail}). Fix staging before promoting — I can run_diagnosis on it.`;
+
+      // Promote the commit staging validated — flag drift honestly.
+      let drift = '';
+      if (project.repoPath && staging.deployedCommit) {
+        const head = await gitHead(project.repoPath).catch(() => null);
+        if (head && head !== staging.deployedCommit) {
+          if (!input.acceptNewerCommit) {
+            return `The repo has moved past what staging tested: staging validated ${staging.deployedCommit.slice(0, 10)}, but the repo is now at ${head.slice(0, 10)}. Either redeploy staging first (safest), or ask the founder if they want to promote the newer commit anyway — then call again with acceptNewerCommit=true.`;
+          }
+          drift = ` (promoting ${head.slice(0, 10)}, NEWER than the staging-tested ${staging.deployedCommit.slice(0, 10)} — founder accepted)`;
+        }
+      }
+      if (project.status === 'new' && !project.siteBucket && (project.cloud ?? 'aws') === 'aws' && (project.archetype ?? staging.archetype) === 'app') {
+        return 'Production has never been provisioned. For an AWS container app, run propose_infrastructure + provision_infrastructure on production once; after that, promotions are one step.';
+      }
+      const verdict = await requestApproval({
+        type: 'deploy',
+        projectName: project.name,
+        summary: `PROMOTE staging → production for "${project.name}"${drift}: staging is verified serving (${probe.detail}); production now redeploys through the same pipeline.`,
+      });
+      if (verdict !== 'approved') return 'The founder did not approve the promotion. Production is unchanged.';
+      return withActionLock(async () => {
+        try {
+          const prod = getProject(project.name)!;
+          const url = await redeployProject({ ...prod, archetype: prod.archetype ?? staging.archetype, repoPath: prod.repoPath ?? staging.repoPath }, emitLog);
+          await recordDeployedCommit(project.name);
+          auditLog({ type: 'promote.done', summary: `${staging.name} → ${project.name} promoted — verified at ${url}` });
+          return `Promoted to production — LIVE and verified at ${url}${drift}`;
+        } catch (e) {
+          return `Promotion failed: ${(e as Error).message}. Production may be mid-rollout — run_diagnosis will show its real state.`;
+        }
+      });
     }
 
     case 'notify_developer': {
