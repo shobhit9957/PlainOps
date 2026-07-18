@@ -106,7 +106,7 @@ function setBusy(on) {
     input.placeholder = "Working… you can still type — I'll queue follow-ups.";
     indicator.classList.remove('hidden');
   } else {
-    input.placeholder = 'Ask anything, or say what to deploy — AWS, Google Cloud, or Azure…';
+    input.placeholder = 'Say what to deploy, ask anything — or paste an architecture diagram and I\'ll build it…';
     indicator.classList.add('hidden');
   }
 }

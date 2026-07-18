@@ -162,7 +162,7 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
     name: 'deploy_serverless',
     description:
-      "Deploy a SERVERLESS, event-driven architecture (API Gateway + Lambda + SQS + DynamoDB) to the founder's AWS. Use this — NOT the container flow — when the app is serverless: Lambda functions, queues, event processing, no long-running server. The source folder must contain api.js (the API Lambda handler) and worker.js (the SQS worker Lambda). REQUIRES founder click-approval. Near-zero idle cost (pay per request). If the founder has no code, omit sourcePath to deploy the bundled order-pipeline example so they see the full pattern working. If the founder describes a serverless app, scaffold_app the api.js + worker.js first, then call this.",
+      "Deploy a SERVERLESS, event-driven architecture (API Gateway + Lambda + SQS + DynamoDB) to the founder's AWS. Use this — NOT the container flow — when the app is serverless: Lambda functions, queues, event processing, no long-running server. The source folder must contain api.js (API Lambda, exports.handler, API GW payload v2.0) and worker.js (SQS worker, exports.handler); the blueprint injects TABLE_NAME (DynamoDB, hash key 'id') and QUEUE_URL; use only runtime-bundled @aws-sdk v3 clients, no node_modules. REQUIRES founder click-approval. Near-zero idle cost. If the founder describes the app, scaffold_app api.js + worker.js to that contract FIRST, then call this with no sourcePath — it automatically deploys the project's attached/scaffolded code, falling back to the bundled order-pipeline example only when the project has no code at all.",
     input_schema: {
       type: 'object',
       properties: {
@@ -559,7 +559,15 @@ async function dispatchRaw(
     }
 
     case 'deploy_serverless': {
-      const sourceDir = input.sourcePath ? String(input.sourcePath) : BUNDLED_ORDER_PIPELINE;
+      // Priority: explicit path → the project's own (possibly scaffolded) code →
+      // bundled example. Without this, "scaffold then deploy" silently shipped
+      // the example instead of the code the agent just wrote for the founder.
+      let sourceDir = input.sourcePath ? String(input.sourcePath) : '';
+      if (!sourceDir && project.repoPath && fs.existsSync(path.join(project.repoPath, 'api.js')) && fs.existsSync(path.join(project.repoPath, 'worker.js'))) {
+        sourceDir = project.repoPath;
+      }
+      if (!sourceDir) sourceDir = BUNDLED_ORDER_PIPELINE;
+      const usingBundled = sourceDir === BUNDLED_ORDER_PIPELINE;
       try {
         requireApiWorker(sourceDir);
       } catch (e) {
@@ -568,7 +576,7 @@ async function dispatchRaw(
       const verdict = await requestApproval({
         type: 'deploy',
         projectName: project.name,
-        summary: `Deploy a serverless pipeline for "${project.name}" — API Gateway + Lambda (api & worker) + SQS + dead-letter queue + DynamoDB, in ${project.region}.`,
+        summary: `Deploy a serverless pipeline for "${project.name}" — API Gateway + Lambda (api & worker) + SQS + dead-letter queue + DynamoDB, in ${project.region}.${usingBundled ? ' (bundled example app)' : ''}`,
         costText: '~$0/month idle · pay-per-request (Lambda + DynamoDB + SQS free tiers cover light traffic)',
       });
       if (verdict !== 'approved') return 'The founder did not approve the serverless deployment.';
