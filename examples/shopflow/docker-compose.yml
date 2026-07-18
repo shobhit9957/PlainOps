@@ -6,6 +6,10 @@ services:
     ports: ["27017:27017"]
     volumes: ["shopflow_data:/data/db"]
 
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
   users:
     build: ./users
     environment: { MONGODB_URI: "mongodb://mongo:27017/shopflow", PORT: "3001" }
@@ -13,8 +17,8 @@ services:
 
   products:
     build: ./products
-    environment: { MONGODB_URI: "mongodb://mongo:27017/shopflow", PORT: "3002" }
-    depends_on: [mongo]
+    environment: { MONGODB_URI: "mongodb://mongo:27017/shopflow", PORT: "3002", REDIS_URL: "redis://redis:6379" }
+    depends_on: [mongo, redis]
 
   cart:
     build: ./cart
