@@ -22,6 +22,9 @@ import { verifyBackups, backupNow, runDrDrill, datastoreOf } from '../backup.js'
 import { setupCustomDomain, isValidDomain } from '../dns.js';
 import { rollbackDeployment, checkDrift, findSavings } from '../ops.js';
 import { scanSecurity } from '../security.js';
+import { safeDeploy, releasePreview } from '../release.js';
+import { enableCloudMonitoring } from '../cloudmon.js';
+import { detectMigrations, scanMigrationRisks, describeRisks, runMigrations } from '../migrate.js';
 import { notifyDeveloper, anyChannelConfigured, configuredChannels } from '../notify.js';
 import { auditLog } from '../audit.js';
 import { emitBus } from '../bus.js';
@@ -349,6 +352,26 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'safe_deploy',
+    description:
+      "The SAFEST way to ship: deploy, then watch the live URL, and AUTOMATICALLY roll back to the previous build if it stops serving. Optionally runs database migrations first (snapshot → migrate → deploy → health gate). Prefer this over the plain deploy tools for any app already serving real users — the founder approves once, and the revert-on-failure is part of what they approved. Report the health-gate result honestly, including error lines found in the logs after a successful deploy. AWS container/microservices stacks get automatic revert; other shapes still get the health gate and honest guidance.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        migrate: { type: 'boolean', description: 'Run database migrations before deploying (a snapshot is always taken first). Default false.' },
+        service: { type: 'string', description: 'Microservices: which service to revert if the gate fails.' },
+        watchSeconds: { type: 'number', description: 'How long to watch the URL before declaring success (default 120, minimum 30).' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'run_migrations',
+    description:
+      "Run the app's database migrations safely: detect the tool from the repo (Prisma, Knex, Sequelize, TypeORM, node-pg-migrate, Django, Alembic, Rails, Flyway), LINT the pending migrations for destructive statements (dropped columns/tables, type changes, NOT NULL, renames), SNAPSHOT the database, then run the command as a one-off task inside the founder's cloud using the running service's own image, credentials, and network. REQUIRES founder click-approval — and the approval shows the destructive-change warnings first. Use before or during a deploy that needs a schema change; for the combined flow use safe_deploy with migrate=true. AWS container/microservices stacks.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
     name: 'rollback_deployment',
     description:
       "Roll a broken deploy BACK to the previous build — the fastest incident fix there is. Every PlainOps build pushes an immutable v<timestamp> image, so on AWS container/microservices stacks this repoints the service at the previous image, waits for stability, and verifies the URL serves. For microservices pass the service name (or 'all'). REQUIRES founder click-approval. Serverless/static get honest git-based guidance instead (no retained artifacts). Use IMMEDIATELY when a fresh deploy broke production — roll back first, debug after.",
@@ -371,6 +394,19 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
     description:
       "Cost-waste hunt (read-only) across this project's AWS region: unattached EBS volumes, orphaned Elastic IPs, load balancers with zero healthy targets, stopped instances still billing storage, forgotten NAT gateways — each with an estimated monthly cost. Run when the founder asks 'why is my bill high?' or wants to save money. Cleanups I propose afterwards each get their own approval.",
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'enable_cloud_monitoring',
+    description:
+      "Set up monitoring that KEEPS RUNNING WITH PLAINOPS CLOSED — inside the founder's own AWS account: a Route 53 health check probing the live URL every 30s from AWS's global network, a CloudWatch alarm that emails them when it fails twice in a row (and again on recovery), plus load-balancer alarms for unhealthy containers and 5xx bursts. Needs an email address for the alerts (SNS sends a confirmation link they must click). REQUIRES founder click-approval; costs about $0.50/month plus ~$0.10 per alarm. This is the always-on complement to enable_monitoring (which only watches while the app is open) — offer BOTH after any incident, and be explicit about which one survives a closed laptop.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        email: { type: 'string', description: 'Where AWS should send the alerts. Ask the founder for it if you do not have one.' },
+      },
+      required: ['email'],
+      additionalProperties: false,
+    },
   },
   {
     name: 'security_scan',
@@ -1094,6 +1130,57 @@ async function dispatchRaw(
       });
     }
 
+    case 'safe_deploy': {
+      if (!project.repoPath) return 'This project has no code attached. Give me the folder path (analyze_repo with path) or describe the app (scaffold_app) first.';
+      if (project.status === 'new') return 'Nothing is deployed yet, so there is no previous build to fall back to — use the normal deploy flow for the first release, then safe_deploy from then on.';
+      const migrate = input.migrate === true;
+      const preview = releasePreview(project, migrate);
+      const verdict = await requestApproval({
+        type: 'deploy',
+        projectName: project.name,
+        summary: `SAFE DEPLOY of "${project.name}"${migrate ? ' WITH database migrations' : ''}:\n${preview}`,
+      });
+      if (verdict !== 'approved') return 'The founder did not approve the release. Nothing was deployed.';
+      return withActionLock(async () => {
+        try {
+          return await safeDeploy(project.name, {
+            migrate,
+            service: input.service ? String(input.service) : undefined,
+            watchSeconds: input.watchSeconds ? Number(input.watchSeconds) : undefined,
+          }, emitLog);
+        } catch (e) {
+          return `Release stopped: ${(e as Error).message}`;
+        }
+      });
+    }
+
+    case 'run_migrations': {
+      if (!project.repoPath) return 'This project has no code attached — migrations are detected from the repo.';
+      const plan = detectMigrations(project.repoPath);
+      if (!plan) return 'No migration tool detected in this repo (looked for Prisma, Knex, Sequelize, TypeORM, node-pg-migrate, Django, Alembic, Rails, Flyway). If migrations run some other way, tell me the command and I can run it as a one-off task.';
+      const risks = scanMigrationRisks(project.repoPath);
+      const ds = datastoreOf(project);
+      const verdict = await requestApproval({
+        type: 'action',
+        projectName: project.name,
+        summary: `Run database migrations for "${project.name}":\n${plan.tool} — ${plan.command}\n\n${describeRisks(risks)}\n\n${ds.kind === 'none' ? 'No datastore snapshot is possible for this project.' : `A ${ds.kind.toUpperCase()} snapshot is taken first.`}`,
+      });
+      if (verdict !== 'approved') return 'The founder did not approve running migrations. The database is untouched.';
+      return withActionLock(async () => {
+        try {
+          const notes: string[] = [];
+          if (ds.kind !== 'none') {
+            emitLog('Snapshotting the database before migrating…');
+            notes.push(await backupNow(project));
+          }
+          notes.push(await runMigrations(project, plan, emitLog));
+          return notes.join('\n');
+        } catch (e) {
+          return `Migration failed: ${(e as Error).message}`;
+        }
+      });
+    }
+
     case 'rollback_deployment': {
       const verdict = await requestApproval({
         type: 'deploy',
@@ -1124,6 +1211,26 @@ async function dispatchRaw(
       } catch (e) {
         return `Savings scan failed: ${(e as Error).message}`;
       }
+    }
+
+    case 'enable_cloud_monitoring': {
+      const email = String(input.email ?? '').trim();
+      const url = project.siteUrl ?? project.outputs?.app_url ?? project.outputs?.gateway_url ?? project.outputs?.api_url;
+      if (!url) return 'Nothing to monitor yet — deploy the project first.';
+      const verdict = await requestApproval({
+        type: 'action',
+        projectName: project.name,
+        summary: `Set up ALWAYS-ON monitoring in your AWS account for "${project.name}":\nRoute 53 health check on ${url} (every 30s, globally) + CloudWatch alarms (site down, unhealthy containers, 5xx burst) emailing ${email}.\nThis keeps watching when PlainOps is closed.`,
+        costText: '~$0.50/month for the health check + ~$0.10 per alarm.',
+      });
+      if (verdict !== 'approved') return 'The founder did not approve cloud monitoring. Nothing was created.';
+      return withActionLock(async () => {
+        try {
+          return await enableCloudMonitoring(project, email, emitLog);
+        } catch (e) {
+          return `Cloud monitoring setup failed: ${(e as Error).message}`;
+        }
+      });
     }
 
     case 'security_scan': {
