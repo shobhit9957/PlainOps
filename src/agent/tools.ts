@@ -17,6 +17,8 @@ import { estimateCloud } from '../estimator.js';
 import { collectDiagnosis } from '../diagnosis.js';
 import { generateDockerfile } from '../analyzer.js';
 import { whoAmI } from '../aws.js';
+import { generateWorkflow, writeWorkflow, setMonitoring, setAutoDeploy, isGitRepo, watchtowerRequiresChannel } from '../cicd.js';
+import { notifyDeveloper, anyChannelConfigured, configuredChannels } from '../notify.js';
 import { auditLog } from '../audit.js';
 import { emitBus } from '../bus.js';
 import fs from 'node:fs';
@@ -264,12 +266,59 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
     name: 'run_diagnosis',
     description:
-      "Collect hard evidence about why this project is broken or misbehaving, on WHATEVER cloud it runs on: live URL probe, service state, recent application logs, infrastructure state, and recent PlainOps actions — all read-only. Call this FIRST whenever the founder reports an error, a down site, a failed deploy, or pastes an error message (pass it as errorText). Then analyze the returned evidence per your diagnosis playbook. Never guess a root cause without running this.",
+      "Collect hard evidence about why this project is broken or misbehaving, on WHATEVER cloud it runs on: live URL probe, service state, recent application logs, infrastructure state, and recent PlainOps actions — all read-only. On AWS it can also sweep infrastructure PLAINOPS DID NOT DEPLOY (the founder's pre-existing app): every ECS service's desired-vs-running, AUTOSCALING LIMITS (min/MAX — the classic 'stuck at max capacity' bottleneck), load-balancer target health, firing CloudWatch alarms, and recent error-level log lines. That sweep runs automatically when the project has no PlainOps-deployed stack; force it with scope='account'. Call this FIRST whenever the founder reports an error, a down site, a failed deploy, or pastes an error message (pass it as errorText). Then analyze per your diagnosis playbook. Never guess a root cause without running this.",
     input_schema: {
       type: 'object',
       properties: {
         errorText: { type: 'string', description: 'The error message / stack trace the founder pasted, verbatim, if any.' },
+        scope: { type: 'string', enum: ['project', 'account'], description: "'account' sweeps the whole AWS region (adopted/pre-existing infrastructure), not just this project's stack." },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'setup_cicd',
+    description:
+      "Set up deploy-on-push CI/CD: writes a GitHub Actions workflow into the project's repo, generated from the REAL deployed resource names (ECR repo, cluster/service, Lambda names, or site bucket — per the project's shape). After the founder pushes it and adds two AWS secrets to the GitHub repo, every push to main ships automatically via GitHub's cloud — no laptop needed. REQUIRES founder click-approval (it writes into their repo). The project must be deployed once first. AWS projects only for now.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'enable_auto_deploy',
+    description:
+      "Standing rule (while the PlainOps app is open): watch the project's git remote and automatically pull + redeploy whenever new commits land — the local, zero-setup alternative to GitHub Actions. Enabling REQUIRES founder click-approval because future deploys then run without a per-deploy click (each one is still audited and sends a notification). Requires the attached folder to be a git repo with an upstream, and a completed first deploy. Pass enabled=false to turn it off (no approval needed).",
+    input_schema: {
+      type: 'object',
+      properties: {
+        enabled: { type: 'boolean', description: 'true to enable (default), false to disable.' },
+        intervalMinutes: { type: 'number', description: 'How often to check the remote (default 3, min 1).' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'enable_monitoring',
+    description:
+      "Watchtower for this project's live URL (while the PlainOps app is open): probe it on an interval; after 2 consecutive failures it automatically collects a full diagnosis AND notifies the developer on the configured channels — the 3am-incident feature. Free to enable/disable (read-only probes). Works best with a notification channel configured in Settings → Connectors. Pass enabled=false to turn off.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        enabled: { type: 'boolean', description: 'true to enable (default), false to disable.' },
+        intervalMinutes: { type: 'number', description: 'Probe interval (default 2, min 1).' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'notify_developer',
+    description:
+      "Send a message to the founder's configured developer channels (Slack / Discord / webhook — set up in Settings → Connectors; you choose the message, never the destination). Use after diagnosing an incident the developer must act on (a code bug, a crash they need to fix), after an important automated action, or when the founder asks you to alert someone. Keep it short and actionable: what broke, the evidence line, the next step.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', description: 'Plain-language notification text.' },
+        severity: { type: 'string', enum: ['info', 'warning', 'critical'], description: 'Default info.' },
+      },
+      required: ['message'],
       additionalProperties: false,
     },
   },
@@ -782,7 +831,92 @@ async function dispatchRaw(
     }
 
     case 'run_diagnosis': {
-      return await collectDiagnosis(project.name, input.errorText ? String(input.errorText) : undefined);
+      const scope = input.scope === 'account' ? 'account' : input.scope === 'project' ? 'project' : undefined;
+      return await collectDiagnosis(project.name, input.errorText ? String(input.errorText) : undefined, scope);
+    }
+
+    case 'setup_cicd': {
+      if (!project.repoPath) return 'This project has no code folder attached — attach the repo first (analyze_repo with the path).';
+      let plan;
+      try {
+        plan = generateWorkflow(project);
+      } catch (e) {
+        return (e as Error).message;
+      }
+      const verdict = await requestApproval({
+        type: 'action',
+        projectName: project.name,
+        summary: `Write a GitHub Actions deploy pipeline into your repo:\n${project.repoPath}\\.github\\workflows\\${plan.fileName}\n\n${plan.note} Nothing runs until you push it and add the GitHub secrets.`,
+      });
+      if (verdict !== 'approved') return 'The founder did not approve writing the workflow. Nothing was written.';
+      let dest: string;
+      try {
+        dest = writeWorkflow(project, plan);
+      } catch (e) {
+        return (e as Error).message;
+      }
+      auditLog({ type: 'cicd.workflow', summary: `Workflow written for ${project.name}: ${dest}` });
+      return JSON.stringify(
+        {
+          written: dest,
+          pipeline: plan.note,
+          nextSteps: [
+            `Commit and push the workflow file (git add .github && git commit -m "ci: plainops deploy pipeline" && git push).`,
+            `In the GitHub repo: Settings → Secrets and variables → Actions → add ${plan.secretsNeeded.join(' and ')} (an IAM user scoped to this app).`,
+            'Every push to main then deploys automatically in GitHub\'s cloud — the laptop can be off.',
+            'Alternative that needs zero GitHub setup: enable_auto_deploy makes PlainOps itself redeploy on new commits while the app is open.',
+          ],
+        },
+        null,
+        2,
+      );
+    }
+
+    case 'enable_auto_deploy': {
+      const enable = input.enabled !== false;
+      const interval = Number(input.intervalMinutes) || 3;
+      if (!enable) {
+        setAutoDeploy(project.name, false);
+        return 'Auto-deploy is OFF for this project.';
+      }
+      if (!project.repoPath) return 'Attach the code folder first — auto-deploy watches its git remote.';
+      if (!(await isGitRepo(project.repoPath))) return `${project.repoPath} is not a git repository (or git is not installed). Auto-deploy needs a repo with an upstream remote.`;
+      if (project.status === 'new') return 'Deploy this project once first — auto-deploy reuses the existing deploy pipeline for the project\'s shape.';
+      const verdict = await requestApproval({
+        type: 'action',
+        projectName: project.name,
+        summary: `STANDING RULE — Auto-deploy for "${project.name}":\nWhile PlainOps is open, check the repo's git remote every ${interval} min and automatically pull + redeploy new commits.\nFuture deploys will NOT ask for a per-deploy click; every run is audited and sends a notification.`,
+      });
+      if (verdict !== 'approved') return 'The founder did not approve the standing rule. Auto-deploy stays off.';
+      setAutoDeploy(project.name, true, interval);
+      const channelHint = anyChannelConfigured() ? '' : ' Heads-up: no notification channel is configured yet (Settings → Connectors), so deploy results only appear in the app.';
+      return `Auto-deploy is ON: checking the remote every ${interval} min while the app is open; new commits are pulled and shipped through the same verified pipeline.${channelHint}`;
+    }
+
+    case 'enable_monitoring': {
+      const enable = input.enabled !== false;
+      const interval = Number(input.intervalMinutes) || 2;
+      if (!enable) {
+        setMonitoring(project.name, false);
+        return 'Monitoring is OFF for this project.';
+      }
+      const url = project.siteUrl ?? project.outputs?.app_url ?? project.outputs?.gateway_url ?? project.outputs?.api_url;
+      if (!url) return 'Nothing to monitor yet — this project has no live URL. Deploy first.';
+      setMonitoring(project.name, true, interval);
+      const hint = watchtowerRequiresChannel();
+      return `Watchtower is ON: probing ${url} every ${interval} min while the app is open. After 2 consecutive failures I automatically collect a full diagnosis and notify the developer.${hint ? `\n${hint}` : ''}`;
+    }
+
+    case 'notify_developer': {
+      const message = String(input.message ?? '').trim();
+      if (!message) return 'No message provided.';
+      if (!anyChannelConfigured()) {
+        return 'No notification channel is configured. Ask the founder to open Settings → Connectors and add a Slack, Discord, or webhook URL — then I can notify their team.';
+      }
+      const severity = input.severity === 'critical' ? 'critical' : input.severity === 'warning' ? 'warning' : 'info';
+      const res = await notifyDeveloper(project.name, severity, message);
+      const ch = configuredChannels();
+      return `Notification ${res.sent.length ? `sent via ${res.sent.join(', ')}` : 'FAILED on every channel'}${res.failed.length ? ` (failed: ${res.failed.join(', ')})` : ''}. Configured channels: ${Object.entries(ch).filter(([, v]) => v).map(([k]) => k).join(', ')}.`;
     }
 
     default:

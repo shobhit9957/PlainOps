@@ -153,6 +153,14 @@
           <input id="set-model" placeholder="claude-opus-4-8" />
         </div>
         <div class="field">
+          <label>Connectors <small>(status refreshes when you open Settings)</small></label>
+          <div id="connector-status" class="connector-status">checking…</div>
+          <input id="conn-github" type="password" placeholder="GitHub personal access token (stored in the encrypted vault)" />
+          <input id="conn-slack" type="password" placeholder="Slack incoming-webhook URL (developer notifications)" style="margin-top:8px" />
+          <input id="conn-discord" type="password" placeholder="Discord webhook URL" style="margin-top:8px" />
+          <input id="conn-webhook" type="password" placeholder="Generic webhook URL (POST JSON)" style="margin-top:8px" />
+        </div>
+        <div class="field">
           <label>New project <small>(add another app / another cloud)</small></label>
           <div class="grid-2">
             <input id="set-newname" placeholder="another-app" />

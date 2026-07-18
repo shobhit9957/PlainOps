@@ -348,6 +348,24 @@ function updateCloudHint() {
     : '';
 }
 
+async function renderConnectorStatus() {
+  const el = $('connector-status');
+  el.textContent = 'checking…';
+  const c = await api('/api/connectors');
+  const mark = (ok, label, detail) =>
+    `<div><span class="${ok ? 'ok' : 'missing'}">${ok ? '●' : '○'}</span> ${label} — ${detail}</div>`;
+  const notif = c.notifications || {};
+  const notifOn = notif.slack || notif.discord || notif.webhook;
+  el.innerHTML =
+    mark(c.aws?.connected, 'AWS', c.aws?.detail || '') +
+    mark(c.gcp?.connected, 'Google Cloud', c.gcp?.detail || '') +
+    mark(c.azure?.connected, 'Azure', c.azure?.detail || '') +
+    mark(c.github?.connected, 'GitHub', c.github?.detail || '') +
+    mark(notifOn, 'Notifications', notifOn
+      ? 'sending to ' + ['slack', 'discord', 'webhook'].filter((k) => notif[k]).join(', ')
+      : 'no channel yet — needed for the watchtower + auto-deploy alerts');
+}
+
 async function checkOnboarding() {
   const s = await api('/api/state');
   if (s.config.hasKey) $('ob-key').placeholder = 'Key already saved — leave blank';
@@ -466,10 +484,24 @@ function init() {
     await refreshState();
   });
 
-  $('settings-btn').addEventListener('click', () => $('settings-modal').classList.remove('hidden'));
+  $('settings-btn').addEventListener('click', () => {
+    $('settings-modal').classList.remove('hidden');
+    renderConnectorStatus();
+  });
   $('set-close').addEventListener('click', () => $('settings-modal').classList.add('hidden'));
   $('set-save').addEventListener('click', async () => {
     await api('/api/config', { body: { anthropicApiKey: $('set-key').value.trim(), model: $('set-model').value.trim() } });
+    const conn = {
+      githubToken: $('conn-github').value.trim(),
+      slack: $('conn-slack').value.trim(),
+      discord: $('conn-discord').value.trim(),
+      webhook: $('conn-webhook').value.trim(),
+    };
+    if (conn.githubToken || conn.slack || conn.discord || conn.webhook) {
+      const r = await api('/api/connectors', { body: conn });
+      if (r.error) { alert(r.error); return; }
+      ['conn-github', 'conn-slack', 'conn-discord', 'conn-webhook'].forEach((id) => { $(id).value = ''; });
+    }
     $('settings-modal').classList.add('hidden');
   });
   $('set-newproject').addEventListener('click', async () => {

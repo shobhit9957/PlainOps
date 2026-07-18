@@ -26,6 +26,10 @@ export interface Project {
   siteUrl?: string;
   lastDeployAt?: string;
   createdAt: string;
+  /** Watchtower: probe the live URL on an interval; incident → diagnose + notify. */
+  monitor?: { enabled: boolean; intervalMin: number };
+  /** Standing rule (enabled via one approval): poll git remote, redeploy on new commits. */
+  autoDeploy?: { enabled: boolean; intervalMin: number };
 }
 
 export interface AppState {

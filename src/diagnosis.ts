@@ -6,6 +6,7 @@ import { tailAppLogs } from './aws.js';
 import { runCloudCli } from './clouds/cloudcli.js';
 import { validateLive, defaultDeps } from './orchestrator.js';
 import { cloudTfDir } from './multicloud.js';
+import { scanAwsEstate } from './adopt.js';
 
 /**
  * Evidence collector for run_diagnosis. PlainOps' diagnosis model is:
@@ -63,11 +64,17 @@ function projectFacts(p: Project): string {
  * Collect a diagnosis evidence bundle for a project (or a pasted error with no
  * deploy context). Read-only everywhere; every item is best-effort.
  */
-export async function collectDiagnosis(projectName: string, errorText?: string): Promise<string> {
+export async function collectDiagnosis(projectName: string, errorText?: string, scope?: 'project' | 'account'): Promise<string> {
   const p = getProject(projectName);
   if (!p) return `Error: project ${projectName} not found.`;
   const cloud = p.cloud ?? 'aws';
   const items: EvidenceItem[] = [];
+
+  // Adopted infrastructure: when the founder's app was NOT deployed by
+  // PlainOps (no outputs, no site) — or they ask for the whole account —
+  // sweep the region instead of only our own records.
+  const adopted = cloud === 'aws' && !p.outputs && !p.siteBucket;
+  const accountScope = cloud === 'aws' && (scope === 'account' || adopted);
 
   if (errorText?.trim()) items.push({ source: 'error reported by the founder', content: cap(errorText, 3500) });
   items.push({ source: 'project record', content: projectFacts(p) });
@@ -174,8 +181,17 @@ export async function collectDiagnosis(projectName: string, errorText?: string):
     }
   }
 
+  if (accountScope) {
+    items.push(
+      await tryItem(`full AWS estate scan (${p.region})${adopted ? ' — this infrastructure was not deployed by PlainOps' : ''}`, () =>
+        scanAwsEstate(p.region),
+      ),
+    );
+  }
+
   let bundle = items.map((i) => `### ${i.source}\n${i.content}`).join('\n\n');
-  if (bundle.length > TOTAL_CAP) bundle = bundle.slice(0, TOTAL_CAP) + '\n…(evidence truncated)';
+  const totalCap = accountScope ? TOTAL_CAP * 2 : TOTAL_CAP; // estate sweeps carry more evidence
+  if (bundle.length > totalCap) bundle = bundle.slice(0, totalCap) + '\n…(evidence truncated)';
   return (
     `DIAGNOSIS EVIDENCE for "${p.name}" (${cloud}). Analyze per your diagnosis playbook: ` +
     `state the most likely root cause ONLY if the evidence shows it, otherwise say what is missing and collect it with the read-only CLI tools.\n\n` +

@@ -6,6 +6,8 @@ import { loadConfig, saveConfig, isDemoMode } from './config.js';
 import { loadState, getProject, upsertProject, type Project, type Cloud } from './state.js';
 import { detectClouds } from './clouds/cloudcli.js';
 import { estimate, estimateCloud } from './estimator.js';
+import { setSecret as vaultSet, listSecretNames } from './vault.js';
+import { configuredChannels, saveChannel } from './notify.js';
 import { readAudit } from './audit.js';
 import { onBus, emitBus } from './bus.js';
 import { resolveApproval, resolveSecretPrompt, listPendingActions } from './gate.js';
@@ -151,6 +153,53 @@ export function createServer() {
       gcp: { connected: clouds.gcp.installed && clouds.gcp.authenticated, detail: clouds.gcp.detail },
       azure: { connected: clouds.azure.installed && clouds.azure.authenticated, detail: clouds.azure.detail },
     });
+  });
+
+  // Connectors: what's linked (statuses only — secret values are never echoed).
+  app.get('/api/connectors', async (_req, res) => {
+    const names = new Set(listSecretNames());
+    let clouds;
+    if (isDemoMode()) {
+      clouds = {
+        aws: { connected: true, detail: 'account 123456789012' },
+        gcp: { connected: true, detail: 'project acme-demo' },
+        azure: { connected: true, detail: 'subscription Acme Dev' },
+      };
+    } else {
+      const c = await detectClouds();
+      let aws: { connected: boolean; detail: string };
+      try {
+        const w = await whoAmI('us-east-1');
+        aws = { connected: true, detail: `account ${w.accountId}` };
+      } catch {
+        aws = { connected: false, detail: 'run `aws configure`' };
+      }
+      clouds = {
+        aws,
+        gcp: { connected: c.gcp.installed && c.gcp.authenticated, detail: c.gcp.detail },
+        azure: { connected: c.azure.installed && c.azure.authenticated, detail: c.azure.detail },
+      };
+    }
+    res.json({
+      ...clouds,
+      github: { connected: names.has('GITHUB_TOKEN'), detail: names.has('GITHUB_TOKEN') ? 'token stored in the local vault' : 'add a personal access token' },
+      notifications: configuredChannels(),
+    });
+  });
+
+  // Save connector credentials. Values go straight into the encrypted vault
+  // (and are therefore scrubbed from anything the model ever sees).
+  app.post('/api/connectors', (req, res) => {
+    const { githubToken, slack, discord, webhook } = req.body ?? {};
+    try {
+      if (typeof githubToken === 'string' && githubToken.trim()) vaultSet('GITHUB_TOKEN', githubToken.trim());
+      if (typeof slack === 'string' && slack.trim()) saveChannel('slack', slack);
+      if (typeof discord === 'string' && discord.trim()) saveChannel('discord', discord);
+      if (typeof webhook === 'string' && webhook.trim()) saveChannel('webhook', webhook);
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(400).json({ error: (e as Error).message });
+    }
   });
 
   // Cost dashboard: monthly estimate per project + portfolio totals per cloud.
