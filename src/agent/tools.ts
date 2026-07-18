@@ -21,6 +21,7 @@ import { generateWorkflow, writeWorkflow, setMonitoring, setAutoDeploy, isGitRep
 import { verifyBackups, backupNow, runDrDrill, datastoreOf } from '../backup.js';
 import { setupCustomDomain, isValidDomain } from '../dns.js';
 import { rollbackDeployment, checkDrift, findSavings } from '../ops.js';
+import { scanSecurity } from '../security.js';
 import { notifyDeveloper, anyChannelConfigured, configuredChannels } from '../notify.js';
 import { auditLog } from '../audit.js';
 import { emitBus } from '../bus.js';
@@ -369,6 +370,12 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
     name: 'find_savings',
     description:
       "Cost-waste hunt (read-only) across this project's AWS region: unattached EBS volumes, orphaned Elastic IPs, load balancers with zero healthy targets, stopped instances still billing storage, forgotten NAT gateways — each with an estimated monthly cost. Run when the founder asks 'why is my bill high?' or wants to save money. Cleanups I propose afterwards each get their own approval.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'security_scan',
+    description:
+      "Read-only security posture scan of this project's AWS region: storage buckets exposed to the internet, management/database ports (SSH, RDP, MySQL, Postgres, Mongo, Redis) open to 0.0.0.0/0, publicly-addressable databases, unencrypted disks, missing root MFA, and access keys over a year old. Each finding names the resource, why it matters in one line, and the fix. Free and instant. Run when the founder asks 'is this secure?', before a launch, and in any production-readiness review. Fixes are proposed afterwards through the normal approval.",
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -1116,6 +1123,17 @@ async function dispatchRaw(
         return await findSavings(project.region);
       } catch (e) {
         return `Savings scan failed: ${(e as Error).message}`;
+      }
+    }
+
+    case 'security_scan': {
+      if ((project.cloud ?? 'aws') !== 'aws') {
+        return `The built-in posture scan covers AWS today. For ${project.cloud === 'gcp' ? 'Google Cloud' : 'Azure'} I can run targeted read-only checks with the CLI (public buckets, open firewall rules, public database IPs) — say the word and I'll do that now.`;
+      }
+      try {
+        return await scanSecurity(project.region);
+      } catch (e) {
+        return `Security scan failed: ${(e as Error).message}`;
       }
     }
 

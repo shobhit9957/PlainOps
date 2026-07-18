@@ -48,3 +48,18 @@ describe('r53Change', () => {
     expect(rr.TTL).toBeUndefined();
   });
 });
+
+describe('recordSetName (apex vs subdomain)', () => {
+  it('returns @ at the zone apex — never the full domain', async () => {
+    const { recordSetName } = await import('../src/dns.js');
+    expect(recordSetName('example.com', 'example.com')).toBe('@');
+    expect(recordSetName('example.com.', 'example.com')).toBe('@');
+    expect(recordSetName('EXAMPLE.com', 'example.com.')).toBe('@');
+  });
+  it('strips only the zone suffix for subdomains', async () => {
+    const { recordSetName } = await import('../src/dns.js');
+    expect(recordSetName('app.example.com', 'example.com')).toBe('app');
+    expect(recordSetName('api.staging.example.com', 'example.com.')).toBe('api.staging');
+    expect(recordSetName('api.staging.example.com', 'staging.example.com')).toBe('api');
+  });
+});

@@ -34,6 +34,17 @@ export function bestZoneMatch<T extends { name: string }>(domain: string, zones:
   return best;
 }
 
+/**
+ * Record-set name relative to its zone. At the apex (domain === zone) both
+ * Azure DNS and Cloud DNS want "@"/the bare zone — passing the full domain
+ * there creates "example.com.example.com". Subdomains keep their prefix.
+ */
+export function recordSetName(domain: string, zoneName: string): string {
+  const d = domain.toLowerCase().replace(/\.$/, '');
+  const z = zoneName.toLowerCase().replace(/\.$/, '');
+  return d === z ? '@' : d.slice(0, -(z.length + 1));
+}
+
 /** Route 53 change-batch for a single UPSERT (pure, testable). */
 export function r53Change(name: string, type: string, value: string, aliasZoneId?: string): string {
   const rr = aliasZoneId
@@ -167,13 +178,15 @@ async function setupGcp(p: Project, domain: string, log: (l: string) => void): P
 
   const zonesRes = await runCloudCli('gcp', ['dns', 'managed-zones', 'list', '--project', proj, '--format', 'json(name,dnsName)'], 60_000);
   const zones: Array<{ name: string; dnsName: string }> = zonesRes.code === 0 ? JSON.parse(zonesRes.stdout || '[]') : [];
-  const zone = bestZoneMatch(domain, zones.map((z) => ({ ...z, name: z.dnsName })));
+  // bestZoneMatch matches on the DNS name, but gcloud's --zone flag wants the
+  // MANAGED ZONE id — keep both rather than overwriting one with the other.
+  const zone = bestZoneMatch(domain, zones.map((z) => ({ name: z.dnsName, managedZone: z.name })));
   if (zone && records.length) {
     for (const r of records) {
       const recordName = r.name ? `${r.name}.${domain}.` : `${domain}.`;
-      await runCloudCli('gcp', ['dns', 'record-sets', 'create', recordName, `--type=${r.type}`, `--rrdatas=${r.rrdata}`, `--ttl=300`, `--zone=${(zone as unknown as { name: string; dnsName: string }).name}`, '--project', proj], 60_000).catch(() => null);
+      await runCloudCli('gcp', ['dns', 'record-sets', 'create', recordName, `--type=${r.type}`, `--rrdatas=${r.rrdata}`, `--ttl=300`, `--zone=${zone.managedZone}`, '--project', proj], 60_000).catch(() => null);
     }
-    log(`Published ${records.length} record(s) in Cloud DNS zone ${zone.name}.`);
+    log(`Published ${records.length} record(s) in Cloud DNS zone ${zone.managedZone}.`);
     auditLog({ type: 'domain.setup', summary: `${p.name}: ${domain} mapped on Cloud Run + Cloud DNS records` });
     return `https://${domain} is mapping to ${service}: records published in Cloud DNS; Google issues the managed certificate once DNS propagates (typically 15–60 min).`;
   }
@@ -197,7 +210,7 @@ async function setupAzure(p: Project, domain: string, log: (l: string) => void):
   if (!zone) {
     return `The zone for ${domain} is not hosted in Azure DNS. Add these records at your DNS provider, then run this again:\n  CNAME  ${domain}  →  ${info.fqdn}\n  TXT    asuid.${domain}  →  ${info.verify}\nOnce they resolve I'll bind the hostname with a free managed certificate.`;
   }
-  const sub = domain.replace(`.${zone.name}`, '');
+  const sub = recordSetName(domain, zone.name);
   log(`Publishing records in Azure DNS zone ${zone.name}…`);
   await runCloudCli('azure', ['network', 'dns', 'record-set', 'cname', 'set-record', '--zone-name', zone.name, '--resource-group', zone.rg, '--record-set-name', sub, '--cname', info.fqdn], 60_000);
   await runCloudCli('azure', ['network', 'dns', 'record-set', 'txt', 'add-record', '--zone-name', zone.name, '--resource-group', zone.rg, '--record-set-name', `asuid.${sub}`, '--value', info.verify], 60_000).catch(() => null);

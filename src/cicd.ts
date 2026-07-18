@@ -388,6 +388,7 @@ const lastMonitorRun = new Map<string, number>();
 const lastAutoDeployRun = new Map<string, number>();
 const autoDeployBusy = new Set<string>();
 let timer: NodeJS.Timeout | null = null;
+let tickRunning = false;
 
 function due(map: Map<string, number>, key: string, intervalMin: number): boolean {
   const last = map.get(key) ?? 0;
@@ -468,6 +469,10 @@ async function autoDeployTick(p: Project): Promise<void> {
 export function startWatchers(): void {
   if (timer) return;
   timer = setInterval(() => {
+    // A microservices auto-deploy can hold this pass for ~25 minutes while the
+    // 30s interval keeps firing. Without this guard the passes stack up.
+    if (tickRunning) return;
+    tickRunning = true;
     void (async () => {
       for (const p of loadState().projects) {
         try {
@@ -477,7 +482,9 @@ export function startWatchers(): void {
           auditLog({ type: 'watcher.error', summary: `${p.name}: ${(e as Error).message}` });
         }
       }
-    })();
+    })().finally(() => {
+      tickRunning = false;
+    });
   }, 30_000);
   timer.unref?.();
 }
