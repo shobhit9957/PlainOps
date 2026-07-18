@@ -1,14 +1,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+export interface ServiceSummary {
+  name: string;
+  port: number | null;
+  usesMongo: boolean;
+  usesRedis: boolean;
+}
+
 export interface RepoReport {
-  framework: 'nextjs' | 'node' | 'python' | 'static' | 'unknown';
+  framework: 'nextjs' | 'node' | 'python' | 'static' | 'microservices' | 'unknown';
   hasDockerfile: boolean;
   containerPort: number;
   healthPath: string;
   envVarsReferenced: string[];
   startCommand?: string;
   notes: string[];
+  /** Present when the folder is a multi-service repo (subfolders with Dockerfiles). */
+  services?: ServiceSummary[];
 }
 
 const IGNORED_DIRS = new Set(['.git', 'node_modules', 'dist', '.next', '__pycache__', '.venv']);
@@ -26,9 +35,61 @@ function* walkFiles(dir: string, depth = 0): Generator<string> {
   }
 }
 
+/**
+ * A folder whose immediate subfolders carry their own Dockerfiles is a
+ * microservices repo. The single-app heuristics below would look at the ROOT,
+ * find no Dockerfile/package.json, and report the repo as broken — which once
+ * made the agent tell a founder their (perfectly fine) services had no
+ * Dockerfiles. Detect the shape here so the report tells the truth.
+ */
+function detectMultiService(repoPath: string): ServiceSummary[] | null {
+  const services: ServiceSummary[] = [];
+  for (const entry of fs.readdirSync(repoPath, { withFileTypes: true })) {
+    if (!entry.isDirectory() || IGNORED_DIRS.has(entry.name)) continue;
+    const dir = path.join(repoPath, entry.name);
+    if (!fs.existsSync(path.join(dir, 'Dockerfile'))) continue;
+    let port: number | null = null;
+    try {
+      const m = fs.readFileSync(path.join(dir, 'Dockerfile'), 'utf8').match(/^\s*EXPOSE\s+(\d{2,5})/im);
+      if (m) port = parseInt(m[1], 10);
+    } catch { /* ignore */ }
+    let usesMongo = false;
+    let usesRedis = false;
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+      usesMongo = Boolean(deps.mongoose || deps.mongodb);
+      usesRedis = Boolean(deps.redis || deps.ioredis);
+    } catch { /* no package.json is fine */ }
+    services.push({ name: entry.name, port, usesMongo, usesRedis });
+  }
+  return services.length >= 2 ? services : null;
+}
+
 export function analyzeRepo(repoPath: string): RepoReport {
   if (!fs.existsSync(repoPath)) throw new Error(`Repo path not found: ${repoPath}`);
   const notes: string[] = [];
+
+  const multi = detectMultiService(repoPath);
+  if (multi) {
+    const withMongo = multi.filter((s) => s.usesMongo).map((s) => s.name);
+    const withRedis = multi.filter((s) => s.usesRedis).map((s) => s.name);
+    notes.push(
+      `MICROSERVICES repo: ${multi.length} services, each subfolder has its own Dockerfile (${multi.map((s) => s.name).join(', ')}).`,
+    );
+    if (withMongo.length) notes.push(`MongoDB needed by: ${withMongo.join(', ')} — the microservices deploys provision managed Mongo automatically (DocumentDB on AWS, Cosmos DB on Azure).`);
+    if (withRedis.length) notes.push(`Redis needed by: ${withRedis.join(', ')} — the AWS microservices deploy provisions ElastiCache Redis automatically and injects REDIS_URL.`);
+    notes.push('Deploy with deploy_microservices (AWS) or deploy_gcp / deploy_azure with archetype "microservices" — they re-detect every service, port, and datastore themselves.');
+    return {
+      framework: 'microservices',
+      hasDockerfile: true,
+      containerPort: multi.find((s) => s.port)?.port ?? 8080,
+      healthPath: '/',
+      envVarsReferenced: [],
+      notes,
+      services: multi,
+    };
+  }
   const envVars = new Set<string>();
   let framework: RepoReport['framework'] = 'unknown';
   let containerPort = 3000;

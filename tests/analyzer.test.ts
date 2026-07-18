@@ -95,3 +95,39 @@ describe('generateDockerfile', () => {
     expect(generateDockerfile(r, dir)).toBe('FROM custom:1\n');
   });
 });
+
+describe('multi-service detection', () => {
+  it('reports a microservices repo instead of "no Dockerfile" (the ShopFlow bug)', async () => {
+    const { analyzeRepo } = await import('../src/analyzer.js');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'po-ms-detect-'));
+    for (const [svc, port, deps] of [
+      ['gateway', 8080, {}],
+      ['products', 3002, { mongoose: '^8', redis: '^4' }],
+      ['users', 3001, { mongoose: '^8' }],
+    ]) {
+      const dir = path.join(root, String(svc));
+      fs.mkdirSync(dir);
+      fs.writeFileSync(path.join(dir, 'Dockerfile'), `FROM node:20-alpine\nEXPOSE ${port}\nCMD ["node","server.js"]\n`);
+      fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: svc, dependencies: deps }));
+    }
+    const report = analyzeRepo(root);
+    expect(report.framework).toBe('microservices');
+    expect(report.hasDockerfile).toBe(true);
+    expect(report.services?.map((s) => s.name).sort()).toEqual(['gateway', 'products', 'users']);
+    expect(report.services?.find((s) => s.name === 'products')).toMatchObject({ port: 3002, usesMongo: true, usesRedis: true });
+    const notes = report.notes.join(' ');
+    expect(notes).toMatch(/MICROSERVICES repo: 3 services/);
+    expect(notes).toMatch(/ElastiCache Redis automatically/);
+    expect(notes).toMatch(/deploy_microservices/);
+  });
+
+  it('does not misfire on a normal single app', async () => {
+    const { analyzeRepo } = await import('../src/analyzer.js');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'po-single-'));
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'x', scripts: { start: 'node s.js' } }));
+    fs.writeFileSync(path.join(root, 'Dockerfile'), 'FROM node:20-alpine\nEXPOSE 3000\n');
+    const report = analyzeRepo(root);
+    expect(report.framework).toBe('node');
+    expect(report.services).toBeUndefined();
+  });
+});

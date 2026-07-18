@@ -149,7 +149,7 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
     name: 'deploy_microservices',
     description:
-      "Deploy a MULTI-SERVICE / microservices app to the founder's AWS. Use when the project folder contains multiple services, each a subfolder with its own Dockerfile (e.g. gateway + users + products + orders). PLAINOPS auto-detects every service, stands up one autoscaling ECS service each behind a shared load balancer with service discovery (Cloud Map), and provisions a managed MongoDB (Amazon DocumentDB) automatically if any service needs it. Point sourcePath at the folder that CONTAINS the service subfolders. REQUIRES founder click-approval. This is a bigger, pricier deploy than a single app — always present the cost note.",
+      "Deploy a MULTI-SERVICE / microservices app to the founder's AWS. Use when the project folder contains multiple services, each a subfolder with its own Dockerfile (e.g. gateway + users + products + orders). PLAINOPS auto-detects every service, stands up one autoscaling ECS service each behind a shared load balancer with service discovery (Cloud Map), and automatically provisions a managed MongoDB (Amazon DocumentDB) AND a Redis cache (ElastiCache, REDIS_URL injected into every service) whenever the code needs them — no separate steps. Point sourcePath at the folder that CONTAINS the service subfolders. REQUIRES founder click-approval. This is a bigger, pricier deploy than a single app — always present the cost note.",
     input_schema: {
       type: 'object',
       properties: {
