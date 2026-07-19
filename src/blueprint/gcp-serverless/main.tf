@@ -31,6 +31,9 @@ resource "google_project_service" "apis" {
     "artifactregistry.googleapis.com",
     "eventarc.googleapis.com",
     "firestore.googleapis.com",
+    # Cloud Functions gen2 builds the source with Cloud Build, which runs as the
+    # Compute Engine default SA — enable Compute so that SA exists on fresh projects.
+    "compute.googleapis.com",
   ])
   service            = each.value
   disable_on_destroy = false

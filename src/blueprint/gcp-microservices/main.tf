@@ -49,6 +49,8 @@ resource "google_project_service" "apis" {
     "sqladmin.googleapis.com",
     "redis.googleapis.com",
     "compute.googleapis.com",
+    # Images build via `gcloud builds submit` — needs the Cloud Build API too.
+    "cloudbuild.googleapis.com",
   ])
   service            = each.value
   disable_on_destroy = false

@@ -33,6 +33,10 @@ resource "google_project_service" "apis" {
     "secretmanager.googleapis.com",
     "sqladmin.googleapis.com",
     "cloudbuild.googleapis.com",
+    # Cloud Build runs builds as the Compute Engine default service account,
+    # which only exists once the Compute API is enabled — without this,
+    # `gcloud builds submit` fails with PERMISSION_DENIED on a fresh project.
+    "compute.googleapis.com",
   ])
   service            = each.value
   disable_on_destroy = false
