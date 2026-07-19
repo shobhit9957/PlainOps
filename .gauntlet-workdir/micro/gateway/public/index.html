@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>2-service dashboard</title><style>
+:root{color-scheme:dark}body{margin:0;font-family:system-ui,sans-serif;background:#0b1120;color:#e2e8f0;padding:32px}
+h1{margin:0 0 4px}.s{color:#94a3b8;margin-bottom:20px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.card{background:#131c31;border:1px solid #263354;border-radius:8px;padding:10px;font-size:.8rem;display:flex;align-items:center;gap:8px}
+.dot{width:10px;height:10px;border-radius:50%;background:#64748b}.dot.ok{background:#4ade80}.dot.bad{background:#f87171}
+</style></head><body>
+<h1>🛰️ Microservices dashboard</h1><div class="s">Live health of every service, tested through the gateway.</div>
+<div class="grid" id="grid"></div>
+<script>
+async function load(){const svcs=await (await fetch('/api/services')).json();
+const grid=document.getElementById('grid');grid.innerHTML=svcs.map(s=>'<div class="card" id="c-'+s+'"><span class="dot"></span>'+s+'</div>').join('');
+svcs.forEach(async s=>{try{const r=await fetch('/api/'+s+'/health');document.querySelector('#c-'+s+' .dot').className='dot '+(r.ok?'ok':'bad');}catch{document.querySelector('#c-'+s+' .dot').className='dot bad';}});}
+load();setInterval(load,5000);
+</script></body></html>

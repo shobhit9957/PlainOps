@@ -427,6 +427,9 @@ resource "aws_db_instance" "main" {
   instance_class                = "db.t4g.micro"
   allocated_storage             = 20
   storage_type                  = "gp3"
+  # Free on gp3 and settable only at creation — our own security_scan flags
+  # unencrypted databases, so the blueprint must not create them.
+  storage_encrypted             = true
   db_name                       = "appdb"
   username                      = "appuser"
   manage_master_user_password   = true

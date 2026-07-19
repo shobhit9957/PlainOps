@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Deployed by PLAINOPS</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; margin: 0; }
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        min-height: 100vh;
+        background: radial-gradient(1200px 600px at 50% -10%, #16233f, #0b1120 60%);
+        color: #e2e8f0;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        padding: 24px;
+      }
+      .card { max-width: 640px; }
+      .anchor { font-size: 4rem; filter: drop-shadow(0 0 24px rgba(56,189,248,.5)); }
+      h1 { font-size: 2.6rem; margin: 12px 0 8px; letter-spacing: -0.5px; }
+      .accent { color: #38bdf8; }
+      p { color: #94a3b8; font-size: 1.1rem; line-height: 1.6; }
+      .pill {
+        display: inline-block; margin-top: 20px; padding: 8px 18px;
+        border: 1px solid #263354; border-radius: 999px; color: #22d3ee;
+        font-size: .85rem; background: #131c31;
+      }
+      .foot { margin-top: 28px; color: #475569; font-size: .8rem; }
+      code { background: #131c31; padding: 3px 8px; border-radius: 6px; color: #7dd3fc; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="anchor">⚓</div>
+      <h1>Your site is <span class="accent">live</span>.</h1>
+      <p>
+        This static website was deployed to <strong>your own AWS account</strong>
+        by PLAINOPS — from plain English, with the price shown up front, and your
+        credentials never leaving your machine.
+      </p>
+      <div class="pill">Served from Amazon S3 · region <code id="region">ap-south-1</code></div>
+      <div class="foot">Deployed <span id="ts"></span> · PLAINOPS v0.1</div>
+    </div>
+    <script>
+      document.getElementById('ts').textContent = new Date().toLocaleString();
+    </script>
+  <p></p><p>GAUNTLET-V2</p></body>
+</html>

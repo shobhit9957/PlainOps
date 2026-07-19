@@ -264,6 +264,7 @@ resource "aws_docdb_cluster" "main" {
   cluster_identifier              = local.name
   engine                          = "docdb"
   engine_version                  = "5.0.0"
+  storage_encrypted               = true
   master_username                 = "appuser"
   master_password                 = random_password.docdb[0].result
   db_subnet_group_name            = aws_docdb_subnet_group.main[0].name

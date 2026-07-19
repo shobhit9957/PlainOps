@@ -1,0 +1,10 @@
+'use strict';
+const express = require('express');
+const app = express();
+app.use(express.json());
+const PORT = process.env.PORT || 3001;
+const NAME = 'service01';
+app.get('/health', (_req, res) => res.json({ status: 'ok', service: NAME }));
+app.get('/', (_req, res) => res.json({ service: NAME, message: 'service is up', time: new Date().toISOString() }));
+app.get('/work', (_req, res) => res.json({ service: NAME, result: Math.round(Math.random() * 1000), time: new Date().toISOString() }));
+app.listen(PORT, () => console.log('[' + NAME + '] listening on ' + PORT));
