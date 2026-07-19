@@ -26,6 +26,9 @@ import { safeDeploy, releasePreview } from '../release.js';
 import { enableCloudMonitoring } from '../cloudmon.js';
 import { detectMigrations, scanMigrationRisks, describeRisks, runMigrations } from '../migrate.js';
 import { notifyDeveloper, anyChannelConfigured, configuredChannels } from '../notify.js';
+import { rotatableSecrets, bounceService } from '../rotate.js';
+import { createSchedule, listSchedules, removeSchedule, normalizeSchedule } from '../schedule.js';
+import { preflightLaunch, checkVersions } from '../readiness.js';
 import { auditLog } from '../audit.js';
 import { emitBus } from '../bus.js';
 import fs from 'node:fs';
@@ -440,6 +443,47 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
       required: ['message'],
       additionalProperties: false,
     },
+  },
+  {
+    name: 'rotate_secret',
+    description:
+      'Rotate a secret VALUE end to end: the founder types the NEW value into the secure box (you never see it), then the service is restarted onto fresh tasks so it actually takes effect, and the live URL is verified. Use when a credential leaked, an API key was regenerated, or hygiene rotation is due. ECS only reads secrets at task start — without this restart a rotation silently does nothing.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        secret_name: { type: 'string', description: 'Which secret to rotate, e.g. DATABASE_URL. Must be one of the project\'s declared secrets.' },
+      },
+      required: ['secret_name'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'schedule_task',
+    description:
+      "Cron jobs on the founder's OWN cloud via EventBridge Scheduler — they fire with the laptop off. action=create runs a shell command as a one-off task with the service's own image/env/network (container/microservices), or drops a job message on the queue for the worker Lambda (serverless). Translate the founder's plain English (\"every night at 3am\") into a 5-field cron yourself and pass it as schedule. action=list / action=remove manage existing jobs.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['create', 'list', 'remove'], description: 'Default create.' },
+        job: { type: 'string', description: 'Short job name, e.g. "nightly-cleanup". Required for create/remove.' },
+        schedule: { type: 'string', description: '5-field cron ("0 3 * * *"), or AWS cron()/rate()/at(). Required for create.' },
+        command: { type: 'string', description: 'Shell command to run inside the container (container/microservices), e.g. "node jobs/cleanup.js". Not used for serverless.' },
+        service: { type: 'string', description: 'Microservices only: which service\'s image/env runs the command (default: first service).' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'preflight_launch',
+    description:
+      'Read-only launch-readiness check, instant: Fargate vCPU quota vs the autoscaling ceiling (the classic silent launch-killer), scaling headroom, database connection math at full scale, backups, and whether always-on monitoring exists. Run it before a launch, a marketing push, or whenever the founder asks "can we handle the traffic?".',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'check_versions',
+    description:
+      'Read-only version-hygiene check, instant: Dockerfile base images, Lambda runtimes, and the database engine against an end-of-life table. Flags anything past or approaching EOL with the date and the move to make. Run it periodically or when the founder asks about updates/patches/security hygiene.',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
 ];
 
@@ -1276,6 +1320,95 @@ async function dispatchRaw(
       const res = await notifyDeveloper(project.name, severity, message);
       const ch = configuredChannels();
       return `Notification ${res.sent.length ? `sent via ${res.sent.join(', ')}` : 'FAILED on every channel'}${res.failed.length ? ` (failed: ${res.failed.join(', ')})` : ''}. Configured channels: ${Object.entries(ch).filter(([, v]) => v).map(([k]) => k).join(', ')}.`;
+    }
+
+    case 'rotate_secret': {
+      const name = String(input.secret_name ?? '').trim().toUpperCase();
+      const rotatable = rotatableSecrets(project);
+      if (!rotatable.names.length) return rotatable.reason ?? 'Nothing to rotate on this project.';
+      if (!rotatable.names.includes(name)) {
+        return `"${name}" is not one of this project's secrets. Rotatable: ${rotatable.names.join(', ')}.`;
+      }
+      const verdict = await requestApproval({
+        type: 'action',
+        projectName: project.name,
+        summary: `ROTATE the secret ${name} for "${project.name}":\n1. You enter the NEW value in the secure box (next prompt).\n2. It is stored in the vault and pushed to AWS Secrets Manager.\n3. The service restarts onto fresh tasks so the new value takes effect.\n4. The live URL is verified.\nBrief rolling restart — the load balancer keeps serving throughout.`,
+      });
+      if (verdict !== 'approved') return 'The founder did not approve the rotation. Nothing was changed.';
+      const stored = await requestSecretValue(project.name, name);
+      if (!stored) return 'The founder did not enter a new value — the old secret is untouched and the service was not restarted.';
+      return withActionLock(async () => {
+        try {
+          return await bounceService(project, emitLog);
+        } catch (e) {
+          return `The new value is STORED, but the restart failed: ${(e as Error).message}`;
+        }
+      });
+    }
+
+    case 'schedule_task': {
+      const action = String(input.action ?? 'create');
+      if (action === 'list') {
+        try {
+          return await listSchedules(project);
+        } catch (e) {
+          return `Could not list schedules: ${(e as Error).message}`;
+        }
+      }
+      const job = String(input.job ?? '').trim();
+      if (!job) return 'Give the job a short name (e.g. "nightly-cleanup").';
+      if (action === 'remove') {
+        const verdict = await requestApproval({
+          type: 'action',
+          projectName: project.name,
+          summary: `Delete the scheduled job "${job}" for "${project.name}" — it will stop firing permanently.`,
+        });
+        if (verdict !== 'approved') return 'The founder did not approve. The schedule still exists.';
+        try {
+          return await removeSchedule(project, job);
+        } catch (e) {
+          return `Could not delete the schedule: ${(e as Error).message}`;
+        }
+      }
+      const schedule = String(input.schedule ?? '').trim();
+      if (!schedule) return 'Give me the schedule as a 5-field cron (e.g. "0 3 * * *" = every day 03:00 UTC).';
+      let normalized: string;
+      try {
+        normalized = normalizeSchedule(schedule);
+      } catch (e) {
+        return (e as Error).message;
+      }
+      const command = input.command ? String(input.command).trim() : undefined;
+      const verdict = await requestApproval({
+        type: 'action',
+        projectName: project.name,
+        summary: `Create scheduled job "${job}" for "${project.name}": ${normalized}${command ? `\nRuns: ${command} (inside the app's own container image/env)` : '\nDrops a job message on the queue for the worker'}.\nRuns in YOUR AWS account (EventBridge Scheduler) — fires even with PlainOps closed.`,
+        costText: 'Scheduler: ~$1/million firings (effectively free) + task/Lambda runtime while the job runs.',
+      });
+      if (verdict !== 'approved') return 'The founder did not approve the schedule. Nothing was created.';
+      return withActionLock(async () => {
+        try {
+          return await createSchedule(project, { job, schedule: normalized, command, service: input.service ? String(input.service) : undefined }, emitLog);
+        } catch (e) {
+          return `Could not create the schedule: ${(e as Error).message}`;
+        }
+      });
+    }
+
+    case 'preflight_launch': {
+      try {
+        return await preflightLaunch(project);
+      } catch (e) {
+        return `Preflight failed: ${(e as Error).message}`;
+      }
+    }
+
+    case 'check_versions': {
+      try {
+        return await checkVersions(project);
+      } catch (e) {
+        return `Version check failed: ${(e as Error).message}`;
+      }
     }
 
     default:

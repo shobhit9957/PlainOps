@@ -49,6 +49,47 @@ describe('r53Change', () => {
   });
 });
 
+describe('gcpRecordSets (Cloud DNS publishing plan)', () => {
+  it('uses the mapped domain itself as the record name — never a doubled label', async () => {
+    const { gcpRecordSets } = await import('../src/dns.js');
+    // Cloud Run returns name:'app' for a mapping of app.example.com; appending
+    // it to the mapped domain produced app.app.example.com in the old code.
+    const sets = gcpRecordSets('app.example.com', [{ name: 'app', type: 'CNAME', rrdata: 'ghs.googlehosted.com.' }]);
+    expect(sets).toEqual([{ name: 'app.example.com.', type: 'CNAME', rrdatas: ['ghs.googlehosted.com.'] }]);
+  });
+  it('groups every apex A/AAAA rrdata into ONE record-set per type', async () => {
+    const { gcpRecordSets } = await import('../src/dns.js');
+    const records = [
+      { type: 'A', rrdata: '216.239.32.21' },
+      { type: 'A', rrdata: '216.239.34.21' },
+      { type: 'A', rrdata: '216.239.36.21' },
+      { type: 'A', rrdata: '216.239.38.21' },
+      { type: 'AAAA', rrdata: '2001:4860:4802:32::15' },
+      { type: 'AAAA', rrdata: '2001:4860:4802:34::15' },
+    ];
+    const sets = gcpRecordSets('example.com', records);
+    expect(sets).toHaveLength(2);
+    const a = sets.find((s) => s.type === 'A')!;
+    expect(a.name).toBe('example.com.');
+    expect(a.rrdatas).toHaveLength(4);
+    const aaaa = sets.find((s) => s.type === 'AAAA')!;
+    expect(aaaa.rrdatas).toHaveLength(2);
+  });
+});
+
+describe('azureRecordPlan (apex vs subdomain)', () => {
+  it('apex: A record at @, validation TXT is "asuid" — never "asuid.@"', async () => {
+    const { azureRecordPlan } = await import('../src/dns.js');
+    const plan = azureRecordPlan('example.com', 'example.com');
+    expect(plan).toEqual({ apex: true, recordName: '@', asuidName: 'asuid' });
+  });
+  it('subdomain: CNAME at the sub label with asuid.<sub>', async () => {
+    const { azureRecordPlan } = await import('../src/dns.js');
+    const plan = azureRecordPlan('app.example.com', 'example.com.');
+    expect(plan).toEqual({ apex: false, recordName: 'app', asuidName: 'asuid.app' });
+  });
+});
+
 describe('recordSetName (apex vs subdomain)', () => {
   it('returns @ at the zone apex — never the full domain', async () => {
     const { recordSetName } = await import('../src/dns.js');

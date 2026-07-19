@@ -59,3 +59,19 @@ describe('classifyCloud — az', () => {
     expect(classifyCloud('azure', ['storage', 'account', 'list']).kind).toBe('read');
   });
 });
+
+describe('quoteForCmdShell (Windows .cmd shim safety)', () => {
+  it('passes plain args through untouched', async () => {
+    const { quoteForCmdShell } = await import('../src/clouds/cloudcli.js');
+    expect(quoteForCmdShell('run')).toBe('run');
+    expect(quoteForCmdShell('--format=json')).toBe('--format=json');
+    expect(quoteForCmdShell('po-my-app')).toBe('po-my-app');
+  });
+  it('quotes args with spaces so gcloud filters survive the cmd shell', async () => {
+    const { quoteForCmdShell } = await import('../src/clouds/cloudcli.js');
+    expect(quoteForCmdShell('severity>=ERROR AND resource.type=cloud_run_revision'))
+      .toBe('"severity>=ERROR AND resource.type=cloud_run_revision"');
+    expect(quoteForCmdShell('')).toBe('""');
+    expect(quoteForCmdShell('a "quoted" bit')).toBe('"a ""quoted"" bit"');
+  });
+});

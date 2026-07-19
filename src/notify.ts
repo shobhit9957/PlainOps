@@ -1,4 +1,5 @@
 import { getSecret, setSecret, listSecretNames } from './vault.js';
+import { scrub } from './scrub.js';
 import { auditLog } from './audit.js';
 
 /**
@@ -63,6 +64,9 @@ export interface NotifyResult {
  * model-originated strings).
  */
 export async function notifyDeveloper(projectName: string, severity: 'info' | 'warning' | 'critical', message: string): Promise<NotifyResult> {
+  // Watchtower incidents embed app-log evidence, which can contain a secret the
+  // app printed itself — scrub here too, not only on model-facing paths.
+  message = scrub(message);
   const icon = severity === 'critical' ? '🔴' : severity === 'warning' ? '🟠' : '🟢';
   const text = `${icon} PlainOps · ${projectName}\n${message}`.slice(0, 3500);
   const result: NotifyResult = { sent: [], failed: [] };

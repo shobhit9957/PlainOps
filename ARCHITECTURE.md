@@ -33,7 +33,7 @@ One Node process. No database, no queue, no daemon.
 │                              │                                     │
 │                    ┌─────────┴─────────┐                           │
 │                    ▼                   ▼                           │
-│              src/gate.ts        src/agent/tools.ts (15 tools)      │
+│              src/gate.ts        src/agent/tools.ts (42 tools)      │
 │           approval + lock              │                           │
 │                                        ▼                           │
 │         orchestrator · tofu · aws · awscli · vault · scrub         │
@@ -71,7 +71,22 @@ impossible. `chat.busy` / `chat.queued` / `chat.idle` events drive the dashboard
 Every streamed delta and assistant message passes through `scrub()` before it
 reaches the bus.
 
-## The 15 tools
+## The tools (42)
+
+The original 15 below are the deploy core. The operations layer added on top:
+GCP/Azure deploys + gated CLIs (`deploy_gcp`, `deploy_azure`, `gcloud_cli`,
+`az_cli`, `cloud_status`), diagnosis (`run_diagnosis` — sweeps the whole
+region/project/subscription for adopted infra), safe releases (`safe_deploy`,
+`run_migrations`, `rollback_deployment`), day-2 hygiene (`check_drift`,
+`find_savings`, `security_scan`, `preflight_launch`, `check_versions`,
+`rotate_secret`, `schedule_task`), resilience (`verify_backups`, `backup_now`,
+`run_dr_drill`, `enable_cloud_monitoring`), delivery (`setup_cicd`,
+`enable_auto_deploy`, `enable_monitoring`, `setup_environments`,
+`promote_to_production`, `setup_custom_domain`), and `notify_developer`.
+Every mutating one awaits the same approval gate; every read-only one says so
+in its schema and runs instantly.
+
+### The original 15
 
 | Tool | Effect | Gate |
 |---|---|---|
@@ -225,7 +240,7 @@ from Cost Explorer, filtered by the `plainops-project` tag.
 
 ## Testing
 
-15 files, 76 tests, `vitest`. AWS is faked with `aws-sdk-client-mock`; the
+29 files, 179 tests, `vitest`. AWS is faked with `aws-sdk-client-mock`; the
 orchestrator exposes an injectable `OrchestratorDeps`; the agent loop accepts a fake
 Anthropic client. Every test points `PLAINOPS_HOME` at a fresh temp dir.
 

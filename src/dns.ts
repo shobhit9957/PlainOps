@@ -45,6 +45,41 @@ export function recordSetName(domain: string, zoneName: string): string {
   return d === z ? '@' : d.slice(0, -(z.length + 1));
 }
 
+/**
+ * Group Cloud Run domain-mapping resourceRecords into the record-sets to
+ * publish in Cloud DNS. Two traps this exists to avoid: (a) GCP's `name` field
+ * is a label relative to the VERIFIED BASE domain — appending it to the mapped
+ * domain doubles it (app.example.com became app.app.example.com); the absolute
+ * record name is always the mapped domain itself. (b) Apex mappings return
+ * several A/AAAA rrdatas which must land in ONE record-set per type —
+ * per-rrdata creates fail on the second with "already exists".
+ */
+export function gcpRecordSets(
+  domain: string,
+  records: Array<{ rrdata: string; type: string; name?: string }>,
+): Array<{ name: string; type: string; rrdatas: string[] }> {
+  const d = domain.toLowerCase().replace(/\.$/, '');
+  const byType = new Map<string, string[]>();
+  for (const r of records) {
+    const list = byType.get(r.type) ?? [];
+    if (!list.includes(r.rrdata)) list.push(r.rrdata);
+    byType.set(r.type, list);
+  }
+  return [...byType.entries()].map(([type, rrdatas]) => ({ name: `${d}.`, type, rrdatas }));
+}
+
+/**
+ * The Azure DNS records a Container Apps hostname bind needs. At the apex a
+ * CNAME is illegal (Azure DNS rejects it) — the plan switches to an A record
+ * on the environment's static IP — and the validation TXT lives at `asuid`,
+ * never the literal label `asuid.@`.
+ */
+export function azureRecordPlan(domain: string, zoneName: string): { apex: boolean; recordName: string; asuidName: string } {
+  const sub = recordSetName(domain, zoneName);
+  const apex = sub === '@';
+  return { apex, recordName: sub, asuidName: apex ? 'asuid' : `asuid.${sub}` };
+}
+
 /** Route 53 change-batch for a single UPSERT (pure, testable). */
 export function r53Change(name: string, type: string, value: string, aliasZoneId?: string): string {
   const rr = aliasZoneId
@@ -182,11 +217,23 @@ async function setupGcp(p: Project, domain: string, log: (l: string) => void): P
   // MANAGED ZONE id — keep both rather than overwriting one with the other.
   const zone = bestZoneMatch(domain, zones.map((z) => ({ name: z.dnsName, managedZone: z.name })));
   if (zone && records.length) {
-    for (const r of records) {
-      const recordName = r.name ? `${r.name}.${domain}.` : `${domain}.`;
-      await runCloudCli('gcp', ['dns', 'record-sets', 'create', recordName, `--type=${r.type}`, `--rrdatas=${r.rrdata}`, `--ttl=300`, `--zone=${zone.managedZone}`, '--project', proj], 60_000).catch(() => null);
+    const sets = gcpRecordSets(domain, records);
+    const failed: string[] = [];
+    for (const s of sets) {
+      const args = (verb: 'create' | 'update') => [
+        'dns', 'record-sets', verb, s.name, `--type=${s.type}`, `--rrdatas=${s.rrdatas.join(',')}`, '--ttl=300', `--zone=${zone.managedZone}`, '--project', proj,
+      ];
+      let res = await runCloudCli('gcp', args('create'), 60_000);
+      // Already exists (including a partial set from an earlier attempt) → update to the full value.
+      if (res.code !== 0 && /already exists/i.test(res.stderr || res.stdout)) {
+        res = await runCloudCli('gcp', args('update'), 60_000);
+      }
+      if (res.code !== 0) failed.push(`${s.type} ${s.name}: ${(res.stderr || res.stdout).trim().split(/\r?\n/).pop()}`);
     }
-    log(`Published ${records.length} record(s) in Cloud DNS zone ${zone.managedZone}.`);
+    if (failed.length) {
+      return `Domain mapping created, but publishing to Cloud DNS zone ${zone.managedZone} partly failed:\n${failed.map((f) => `  ${f}`).join('\n')}\nExpected records:\n${sets.map((s) => `  ${s.type}  ${s.name}  →  ${s.rrdatas.join(', ')}`).join('\n')}\nFix the zone permissions (or add them manually) and run this again — everything is idempotent.`;
+    }
+    log(`Published ${sets.length} record-set(s) in Cloud DNS zone ${zone.managedZone}.`);
     auditLog({ type: 'domain.setup', summary: `${p.name}: ${domain} mapped on Cloud Run + Cloud DNS records` });
     return `https://${domain} is mapping to ${service}: records published in Cloud DNS; Google issues the managed certificate once DNS propagates (typically 15–60 min).`;
   }
@@ -210,13 +257,33 @@ async function setupAzure(p: Project, domain: string, log: (l: string) => void):
   if (!zone) {
     return `The zone for ${domain} is not hosted in Azure DNS. Add these records at your DNS provider, then run this again:\n  CNAME  ${domain}  →  ${info.fqdn}\n  TXT    asuid.${domain}  →  ${info.verify}\nOnce they resolve I'll bind the hostname with a free managed certificate.`;
   }
-  const sub = recordSetName(domain, zone.name);
+  const plan = azureRecordPlan(domain, zone.name);
   log(`Publishing records in Azure DNS zone ${zone.name}…`);
-  await runCloudCli('azure', ['network', 'dns', 'record-set', 'cname', 'set-record', '--zone-name', zone.name, '--resource-group', zone.rg, '--record-set-name', sub, '--cname', info.fqdn], 60_000);
-  await runCloudCli('azure', ['network', 'dns', 'record-set', 'txt', 'add-record', '--zone-name', zone.name, '--resource-group', zone.rg, '--record-set-name', `asuid.${sub}`, '--value', info.verify], 60_000).catch(() => null);
+  if (plan.apex) {
+    // A CNAME at the zone apex is illegal in Azure DNS — the apex points an A
+    // record at the Container Apps environment's static inbound IP instead.
+    const ipRes = await runCloudCli('azure', ['containerapp', 'env', 'show', '--ids', info.envId, '--query', 'properties.staticIp', '--output', 'tsv'], 60_000);
+    const staticIp = ipRes.code === 0 ? ipRes.stdout.trim() : '';
+    if (!staticIp) {
+      return `The zone for ${domain} is in Azure DNS, but an apex domain needs an A record to the environment's static IP and I could not read it (${(ipRes.stderr || ipRes.stdout).trim().split(/\r?\n/).pop()}). Add these records manually, then run this again:\n  A    @  →  <the environment's static IP (az containerapp env show)>\n  TXT  asuid  →  ${info.verify}`;
+    }
+    const a = await runCloudCli('azure', ['network', 'dns', 'record-set', 'a', 'add-record', '--zone-name', zone.name, '--resource-group', zone.rg, '--record-set-name', plan.recordName, '--ipv4-address', staticIp], 60_000);
+    if (a.code !== 0 && !/already exist/i.test(a.stderr || a.stdout)) {
+      throw new Error(`Could not publish the apex A record: ${(a.stderr || a.stdout).trim().split(/\r?\n/).pop()}`);
+    }
+  } else {
+    const c = await runCloudCli('azure', ['network', 'dns', 'record-set', 'cname', 'set-record', '--zone-name', zone.name, '--resource-group', zone.rg, '--record-set-name', plan.recordName, '--cname', info.fqdn], 60_000);
+    if (c.code !== 0) {
+      throw new Error(`Could not publish the CNAME record: ${(c.stderr || c.stdout).trim().split(/\r?\n/).pop()}`);
+    }
+  }
+  const txt = await runCloudCli('azure', ['network', 'dns', 'record-set', 'txt', 'add-record', '--zone-name', zone.name, '--resource-group', zone.rg, '--record-set-name', plan.asuidName, '--value', info.verify], 60_000);
+  if (txt.code !== 0 && !/already exist/i.test(txt.stderr || txt.stdout)) {
+    log(`⚠ Could not publish the ${plan.asuidName} TXT validation record — the bind below may fail until it exists.`);
+  }
 
   log('Binding the hostname with a free Azure-managed certificate…');
-  const bind = await runCloudCli('azure', ['containerapp', 'hostname', 'bind', '--name', appName, '--resource-group', rg, '--hostname', domain, '--environment', info.envId, '--validation-method', 'CNAME'], 300_000);
+  const bind = await runCloudCli('azure', ['containerapp', 'hostname', 'bind', '--name', appName, '--resource-group', rg, '--hostname', domain, '--environment', info.envId, '--validation-method', plan.apex ? 'TXT' : 'CNAME'], 300_000);
   if (bind.code !== 0) {
     return `DNS records are published, but the certificate bind reported: ${(bind.stderr || bind.stdout).trim().split('\n').slice(-2).join(' ')}\nThis usually means DNS hasn't propagated yet — run this again in ~10 minutes and the bind completes.`;
   }

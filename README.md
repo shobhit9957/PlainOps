@@ -29,6 +29,16 @@ Plus, on every cloud:
   the root cause in plain English with a concrete fix.
 - **Do-anything CLI access** with guardrails: read-only commands run instantly; anything
   mutating needs your click; commands that would expose credentials are refused.
+- **Day-2 operations** — the work a DevOps engineer actually does after launch: safe
+  deploys with automatic rollback, database migrations (linted, snapshot-first),
+  one-command rollback to the previous build, secret rotation end-to-end, cron jobs on
+  your own infra, backups + restore drills, drift detection, cost-waste sweeps, security
+  posture scans, launch preflight (quota/scaling/connection math), EOL version watch,
+  custom domains + HTTPS, staging→production promotion, CI/CD generation, and always-on
+  cloud-resident monitoring that keeps alerting with your laptop closed.
+- **Adopted infrastructure**: point a project at a cloud where your app already runs —
+  even if PlainOps never deployed it — and diagnosis sweeps the whole
+  region/project/subscription: unhealthy services flagged, error logs, failing operations.
 
 ## The security model (the product promise)
 
@@ -84,7 +94,7 @@ Prerequisites: Node 20+, plus the CLI of each cloud you want to use
 ## Develop
 
 ```bash
-npm test                     # vitest — 19 files, 98 tests
+npm test                     # vitest — 29 files, 179 tests
 npm run typecheck
 npm run validate:all-blueprints   # tofu-validates all 9 blueprints
 npm run build                # compile + assets for the desktop shell

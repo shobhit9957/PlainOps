@@ -102,16 +102,29 @@ export interface CloudCliResult {
   stderr: string;
 }
 
+/**
+ * Quote one argument for the Windows cmd shell. Needed because Node's
+ * execFile with `shell: true` joins file+args with spaces WITHOUT quoting —
+ * a gcloud `logging read "a AND b"` filter would split into four tokens.
+ * Only used for the .cmd/.bat shims; plain binaries keep the safe array path.
+ */
+export function quoteForCmdShell(arg: string): string {
+  if (arg === '') return '""';
+  if (!/[\s"&|<>^%()]/.test(arg)) return arg;
+  // cmd: wrap in double quotes, escape embedded quotes by doubling them.
+  return `"${arg.replace(/"/g, '""')}"`;
+}
+
 export function runCloudCli(cloud: CloudId, args: string[], timeoutMs = 120_000): Promise<CloudCliResult> {
   const bin = resolveCloudBin(cloud);
   // gcloud.cmd / az.cmd are batch files — Windows can only exec those through
-  // a shell. Args stay an array (no string interpolation), which keeps us safe
-  // from quoting bugs for our own composed commands.
+  // a shell. Under a shell the args are joined into one command line, so any
+  // arg with spaces/metacharacters must be quoted for cmd first.
   const needsShell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(bin);
   return new Promise((resolve) => {
     execFile(
       bin,
-      args,
+      needsShell ? args.map(quoteForCmdShell) : args,
       { timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024, shell: needsShell, windowsHide: true },
       (err, stdout, stderr) => {
         resolve({

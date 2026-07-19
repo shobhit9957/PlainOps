@@ -7,6 +7,7 @@ import { runCloudCli } from './clouds/cloudcli.js';
 import { validateLive, defaultDeps } from './orchestrator.js';
 import { cloudTfDir } from './multicloud.js';
 import { scanAwsEstate } from './adopt.js';
+import { scanGcpEstate, scanAzureEstate } from './clouds/estate.js';
 
 /**
  * Evidence collector for run_diagnosis. PlainOps' diagnosis model is:
@@ -72,9 +73,9 @@ export async function collectDiagnosis(projectName: string, errorText?: string, 
 
   // Adopted infrastructure: when the founder's app was NOT deployed by
   // PlainOps (no outputs, no site) — or they ask for the whole account —
-  // sweep the region instead of only our own records.
-  const adopted = cloud === 'aws' && !p.outputs && !p.siteBucket;
-  const accountScope = cloud === 'aws' && (scope === 'account' || adopted);
+  // sweep the region/project/subscription instead of only our own records.
+  const adopted = !p.outputs && !p.siteBucket;
+  const accountScope = scope === 'account' || adopted;
 
   if (errorText?.trim()) items.push({ source: 'error reported by the founder', content: cap(errorText, 3500) });
   items.push({ source: 'project record', content: projectFacts(p) });
@@ -182,11 +183,19 @@ export async function collectDiagnosis(projectName: string, errorText?: string, 
   }
 
   if (accountScope) {
-    items.push(
-      await tryItem(`full AWS estate scan (${p.region})${adopted ? ' — this infrastructure was not deployed by PlainOps' : ''}`, () =>
-        scanAwsEstate(p.region),
-      ),
-    );
+    const suffix = adopted ? ' — this infrastructure was not deployed by PlainOps' : '';
+    if (cloud === 'aws') {
+      items.push(await tryItem(`full AWS estate scan (${p.region})${suffix}`, () => scanAwsEstate(p.region)));
+    } else if (cloud === 'gcp') {
+      items.push(
+        await tryItem(`full GCP estate scan (${p.cloudTarget ?? 'no project set'}, ${p.region})${suffix}`, async () => {
+          if (!p.cloudTarget) throw new Error('this project has no GCP project id recorded — cloud_status shows what gcloud is targeting');
+          return scanGcpEstate(p.cloudTarget, p.region);
+        }),
+      );
+    } else {
+      items.push(await tryItem(`full Azure estate scan (subscription)${suffix}`, () => scanAzureEstate()));
+    }
   }
 
   let bundle = items.map((i) => `### ${i.source}\n${i.content}`).join('\n\n');

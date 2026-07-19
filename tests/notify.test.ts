@@ -46,6 +46,23 @@ describe('notification channels', () => {
     expect(hookBody).toMatchObject({ source: 'plainops', project: 'dating-app', severity: 'critical' });
   });
 
+  it('scrubs secret values before anything leaves the machine', async () => {
+    // A watchtower incident message can carry app-log lines; if the app ever
+    // printed a secret, the webhook post must carry the placeholder instead.
+    const { setSecret } = await import('../src/vault.js');
+    const { saveChannel, notifyDeveloper } = await import('../src/notify.js');
+    setSecret('DATABASE_URL', 'postgres://user:hunter2secret@db.internal:5432/app');
+    saveChannel('slack', 'https://hooks.slack.example/T/B/x');
+    const bodies: string[] = [];
+    vi.stubGlobal('fetch', async (_url: string, init: { body: string }) => {
+      bodies.push(init.body);
+      return { ok: true } as Response;
+    });
+    await notifyDeveloper('p', 'critical', 'Log line: postgres://user:hunter2secret@db.internal:5432/app refused the connection');
+    expect(bodies[0]).not.toContain('hunter2secret');
+    expect(bodies[0]).toContain('{{secret:DATABASE_URL}}');
+  });
+
   it('reports failures per channel instead of throwing', async () => {
     const { saveChannel, notifyDeveloper } = await import('../src/notify.js');
     saveChannel('discord', 'https://discord.example/api/webhooks/x');

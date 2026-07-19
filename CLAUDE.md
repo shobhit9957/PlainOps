@@ -24,7 +24,7 @@ Not a SaaS. There is no PLAINOPS server. Everything runs on localhost.
 npm install
 npm start            # dashboard at http://localhost:7717 (needs cloud creds + Anthropic key)
 npm run demo         # scripted UI walkthrough, no cloud and no API key needed
-npm test             # vitest — 19 files, 98 tests
+npm test             # vitest — 29 files, 179 tests
 npm run typecheck    # tsc --noEmit
 npm run validate:all-blueprints   # tofu validate × 9 (AWS/GCP/Azure)
 npm run build && npx electron .   # run the desktop shell from source
@@ -46,7 +46,7 @@ web/ (dashboard, SSE)  ──HTTP──►  src/server.ts
                              per-project queue        model: claude-opus-4-8
                                       │                MAX_TURNS 12
                                       ▼
-                            src/agent/tools.ts  (15 tools)
+                            src/agent/tools.ts  (42 tools)
                                       │
                     ┌─────────────────┼──────────────────┐
                     ▼                 ▼                  ▼
@@ -89,9 +89,23 @@ Full detail: **[ARCHITECTURE.md](ARCHITECTURE.md)**. Security model:
 | `src/audit.ts` | Append-only scrubbed JSONL audit trail |
 | `src/bus.ts` | In-process EventEmitter → SSE |
 | `src/demo.ts` | Seeded fake projects + scripted chat, no cloud/API |
-| `src/clouds/cloudcli.ts` | gcloud/az runner + read/mutate/**denied** classification + `detectClouds()` |
+| `src/clouds/cloudcli.ts` | gcloud/az runner + read/mutate/**denied** classification + `detectClouds()`; quotes args for the Windows `.cmd` shims |
+| `src/clouds/estate.ts` | Adopted-infra estate scanners for GCP (Cloud Run/Functions/SQL/GKE/error logs) and Azure (Container Apps/Functions/Postgres/AKS/activity failures) |
 | `src/multicloud.ts` | GCP/Azure orchestration: render → apply → remote image build → verify; `destroyCloud` |
-| `src/diagnosis.ts` | `run_diagnosis` evidence collector (probe, logs, state, audit) — read-only, best-effort |
+| `src/diagnosis.ts` | `run_diagnosis` evidence collector (probe, logs, state, audit; estate sweep for adopted projects on all 3 clouds) — read-only, best-effort |
+| `src/adopt.ts` | AWS estate scanner: ECS/autoscaling/target-health/alarms/error-logs across the whole region |
+| `src/release.ts` | `safe_deploy`: snapshot → migrate → deploy → health gate → auto-revert |
+| `src/migrate.ts` | Migration detect + destructive-statement lint + one-off ECS task runner |
+| `src/ops.ts` | `rollback_deployment` (previous immutable tag), `check_drift`, `find_savings` |
+| `src/backup.ts` | Backup audit / on-demand snapshots / DR drills (restore-verify-delete) |
+| `src/cloudmon.ts` | Cloud-resident monitoring: Route 53 health check + CloudWatch alarms + SNS |
+| `src/security.ts` | Read-only posture scan (public buckets/ports/DBs, unencrypted disks, IAM hygiene) |
+| `src/dns.ts` | `setup_custom_domain`: Route 53+ACM+ALB / Cloud Run mapping+Cloud DNS / Container Apps+Azure DNS |
+| `src/cicd.ts` | GH Actions generation (all 3 clouds), auto-deploy + watchtower watchers, staging/promotion |
+| `src/notify.ts` | Slack/Discord/webhook notifications (scrubbed before every POST) |
+| `src/rotate.ts` | `rotate_secret`: secure-box re-entry → Secrets Manager → service bounce → verify |
+| `src/schedule.ts` | `schedule_task`: EventBridge Scheduler cron onto the project's own tasks/queue |
+| `src/readiness.ts` | `preflight_launch` (quota/scaling/connection math) + `check_versions` (EOL watch) |
 | `src/electron-boot.ts` | Boots the Express server inside the Electron main process |
 | `electron/main.cjs` | Desktop shell window (thin; product logic stays in src/) |
 | `scripts/build-dist.mjs` | tsc → dist + copies web/blueprints/examples + generates icon |
