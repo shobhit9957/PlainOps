@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PlainOps — design directions · batch 02</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Courier+Prime:wght@400;700&family=Saira+Semi+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;650&family=Caveat:wght@500;600&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #101013; color: #DDD; font-family: "IBM Plex Sans", sans-serif; padding: 30px 26px 60px; }
+  .intro h1 { font-size: 21px; margin-bottom: 4px; }
+  .intro p { color: #999; font-size: 13px; max-width: 880px; margin-bottom: 30px; }
+  .direction { margin-bottom: 48px; }
+  .direction > .label { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  .direction > .label h2 { font-size: 16px; color: #EEE; white-space: nowrap; }
+  .direction > .label span { font-size: 12.5px; color: #888; }
+
+  /* ═══════════════════ 04 · SIGNAL BOX (interlocking) ═══════════════════ */
+  .sbox { background: #E9E1CE; border-radius: 4px; padding: 0; overflow: hidden; border: 6px solid #4A2E1F; box-shadow: 0 14px 40px rgba(0,0,0,.5); color: #23281F; font-family: "Saira Semi Condensed", sans-serif; }
+  .sbox .diagram { background: #14170F; padding: 20px 26px 24px; position: relative; }
+  .sbox .diagram .d-title { color: #C9BFa0; color: #C9BFA0; font-size: 10px; letter-spacing: 3px; margin-bottom: 16px; }
+  .track { position: relative; height: 74px; }
+  .rail { position: absolute; left: 0; right: 0; height: 0; border-top: 2.5px solid #DAD4BC; }
+  .rail.main { top: 26px; }
+  .rail.loop  { top: 62px; left: 130px; right: 210px; }
+  .switch-line { position: absolute; top: 28px; left: 96px; width: 46px; height: 36px; border-left: 2.5px solid #DAD4BC; transform: skewX(-38deg); border-color: #E8B33B; }
+  .seg-lit { position: absolute; top: 26px; left: 0; width: 250px; border-top: 2.5px solid #E8B33B; box-shadow: 0 0 9px rgba(232,179,59,.8); }
+  .stationlbl { position: absolute; font-family: "IBM Plex Mono", monospace; font-size: 9px; letter-spacing: 1px; color: #8E8768; }
+  .signal { position: absolute; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid #6E684E; }
+  .signal.green { background: #59C76B; box-shadow: 0 0 8px rgba(89,199,107,.9); }
+  .signal.red { background: #E0503C; box-shadow: 0 0 8px rgba(224,80,60,.9); }
+  .sbox .frame { display: flex; gap: 34px; align-items: flex-end; padding: 22px 30px 6px; }
+  .lever-slot { text-align: center; }
+  .lever-slot .plate-num { font-family: "IBM Plex Mono", monospace; font-size: 10px; background: #F5EFDD; border: 1px solid #9A9276; border-radius: 50%; width: 24px; height: 24px; line-height: 22px; margin: 8px auto 0; }
+  .lever { position: relative; width: 20px; height: 112px; margin: 0 auto; border-radius: 10px 10px 4px 4px; box-shadow: inset -3px 0 5px rgba(0,0,0,.35), 0 2px 5px rgba(0,0,0,.3); }
+  .lever.red { background: linear-gradient(90deg, #C33F2E, #8F2517); }
+  .lever.black { background: linear-gradient(90deg, #3A3D3B, #191B1A); }
+  .lever.blue { background: linear-gradient(90deg, #2E5D8C, #1B3C60); }
+  .lever::before { content: ""; position: absolute; top: 8px; left: -4px; right: -4px; height: 22px; border-radius: 12px; background: inherit; filter: brightness(1.25); }
+  .lever.pulled { transform: rotate(24deg); transform-origin: bottom center; }
+  .lever-slot .what { font-size: 10.5px; letter-spacing: 1.6px; text-transform: uppercase; color: #5C5744; margin-top: 6px; }
+  .block-inst { margin-left: auto; text-align: center; padding-bottom: 4px; }
+  .brass { width: 120px; height: 120px; border-radius: 50%; margin: 0 auto; position: relative; background: radial-gradient(circle at 32% 28%, #E8CE7E, #C9A227 55%, #8A6E14); border: 4px solid #6E5710; box-shadow: inset 0 3px 8px rgba(255,255,255,.5), inset 0 -4px 8px rgba(0,0,0,.35), 0 4px 9px rgba(0,0,0,.3); }
+  .brass .dial { position: absolute; inset: 14px; border-radius: 50%; background: #F5EFDD; border: 2px solid #6E5710; }
+  .brass .dial span { position: absolute; font-size: 7.5px; letter-spacing: .5px; font-weight: 600; color: #4A4433; }
+  .brass .dial .l { left: 7px; top: 44px; } .brass .dial .c { left: 50%; top: 9px; transform: translateX(-50%); } .brass .dial .r { right: 5px; top: 44px; }
+  .brass .needle2 { position: absolute; left: 50%; bottom: 50%; width: 3px; height: 38px; margin-left: -1.5px; background: #23281F; transform-origin: bottom center; transform: rotate(-38deg); border-radius: 2px; }
+  .block-inst .what { font-size: 10.5px; letter-spacing: 1.8px; color: #5C5744; margin-top: 8px; text-transform: uppercase; }
+  .sbox .sill { background: #4A2E1F; color: #E9E1CE; font-size: 10px; letter-spacing: 2.5px; padding: 8px 30px; margin-top: 16px; font-family: "IBM Plex Mono", monospace; }
+  .sbox .sill b { color: #E8B33B; font-weight: 400; }
+
+  /* ═══════════════════ 05 · MASTER CONTROL (broadcast) ══════════════════ */
+  .mcr { background: #17181C; border-radius: 8px; border: 1px solid #060608; padding: 20px 24px; font-family: "Archivo", sans-serif; box-shadow: 0 14px 40px rgba(0,0,0,.55); }
+  .mcr .toprow { display: flex; gap: 18px; align-items: stretch; margin-bottom: 18px; }
+  .onair { flex: 0 0 190px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #1E0A0A; border: 2px solid #3A0E0E; border-radius: 6px; padding: 14px; }
+  .onair .box { font-weight: 800; font-size: 22px; letter-spacing: 4px; color: #FF4B3A; text-shadow: 0 0 18px rgba(255,75,58,.9), 0 0 40px rgba(255,75,58,.45); }
+  .onair .sub { font-family: "IBM Plex Mono", monospace; font-size: 9.5px; color: #B06A60; letter-spacing: 2px; margin-top: 6px; }
+  .vu { flex: 1; background: #101114; border: 1px solid #060608; border-radius: 6px; padding: 12px 16px; display: flex; gap: 26px; }
+  .meter { flex: 1; }
+  .meter .m-face { position: relative; height: 64px; background: linear-gradient(180deg, #F3EBD8, #E6DCC2); border-radius: 4px 4px 2px 2px; overflow: hidden; border: 1px solid #060608; }
+  .meter .m-face::before { content: ""; position: absolute; right: 8%; top: 8px; bottom: 26px; width: 18%; background: linear-gradient(90deg, transparent, rgba(224,80,60,.32)); }
+  .meter .m-needle { position: absolute; left: 50%; bottom: 4px; width: 2px; height: 52px; background: #23201A; transform-origin: bottom center; }
+  .meter.traffic .m-needle { transform: rotate(24deg); }
+  .meter.errors .m-needle { transform: rotate(-31deg); }
+  .meter .m-lbl { font-family: "IBM Plex Mono", monospace; font-size: 9.5px; letter-spacing: 1.8px; color: #8B8E98; text-align: center; margin-top: 7px; }
+  .bus { margin-bottom: 12px; }
+  .bus .bus-lbl { font-family: "IBM Plex Mono", monospace; font-size: 9.5px; letter-spacing: 2.2px; color: #8B8E98; margin-bottom: 7px; }
+  .bus .keys { display: flex; gap: 8px; }
+  .key { flex: 1; max-width: 118px; text-align: center; font-size: 11px; font-weight: 700; letter-spacing: .6px; padding: 13px 4px 11px; border-radius: 4px; border: 1px solid #060608; color: #63666F; background: linear-gradient(180deg, #26272C, #1C1D22); box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 2px 4px rgba(0,0,0,.4); }
+  .key.pgm-live { color: #FFD9D4; background: linear-gradient(180deg, #C23B2C, #8F2517); text-shadow: 0 0 10px rgba(255,120,100,.8); }
+  .key.pvw-live { color: #DDFFE4; background: linear-gradient(180deg, #2E8C4A, #1D5E30); text-shadow: 0 0 10px rgba(120,255,150,.7); }
+  .takebar { display: flex; align-items: center; gap: 16px; margin-top: 16px; }
+  .take { width: 150px; padding: 15px 0 13px; text-align: center; font-weight: 800; font-size: 15px; letter-spacing: 5px; color: #14060A; background: linear-gradient(180deg, #FF6B57, #D63A26); border: 1px solid #060608; border-radius: 5px; box-shadow: inset 0 2px 0 rgba(255,255,255,.25), 0 3px 8px rgba(0,0,0,.5); cursor: pointer; }
+  .takebar .note { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: #8B8E98; line-height: 1.7; }
+  .takebar .note b { color: #DDD; font-weight: 400; }
+
+  /* ═══════════════════ 06 · HERBARIUM (tended infra) ════════════════════ */
+  .herb { background: #F7F2E4; color: #33301F; border-radius: 3px; padding: 24px 28px; font-family: "Cormorant Garamond", serif; box-shadow: 0 14px 40px rgba(0,0,0,.5); border: 1px solid #D6CCAF; display: flex; gap: 30px; position: relative; }
+  .herb::before { content: ""; position: absolute; inset: 9px; border: 1px solid rgba(51,48,31,.25); pointer-events: none; }
+  .herb .sheet-title { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); font-size: 13px; letter-spacing: 5px; color: #6E6748; }
+  .plantbox { flex: 1.15; padding-top: 26px; display: flex; gap: 8px; justify-content: center; }
+  .plant { text-align: center; }
+  .plant svg { display: block; margin: 0 auto; }
+  .plant .tape { display: inline-block; width: 36px; height: 11px; background: rgba(214,204,175,.9); border: 1px solid rgba(51,48,31,.18); transform: rotate(-4deg); margin-top: -6px; }
+  .plant .pname { font-style: italic; font-size: 14.5px; margin-top: 5px; }
+  .plant .pstate { font-family: "IBM Plex Mono", monospace; font-size: 9px; letter-spacing: 1px; color: #6E6748; margin-top: 2px; }
+  .plant .pstate.wilt { color: #A8563C; }
+  .herb .speclabel { flex: 1; align-self: flex-end; background: #FDFBF3; border: 1px solid #B8AE8C; padding: 14px 16px 12px; max-width: 330px; font-size: 13.5px; line-height: 1.55; }
+  .speclabel .sl-head { font-variant: small-caps; letter-spacing: 2.5px; font-size: 13px; border-bottom: 1px solid #B8AE8C; padding-bottom: 5px; margin-bottom: 8px; text-align: center; }
+  .speclabel table { width: 100%; border-collapse: collapse; }
+  .speclabel td { padding: 1.5px 0; vertical-align: baseline; }
+  .speclabel td:first-child { font-variant: small-caps; letter-spacing: 1px; color: #6E6748; width: 88px; font-size: 12px; }
+  .speclabel td:last-child { font-family: "IBM Plex Mono", monospace; font-size: 11px; }
+  .speclabel .det { margin-top: 8px; font-style: italic; font-size: 12.5px; color: #6E6748; }
+  .speclabel .det .sig { font-family: "Caveat", cursive; font-size: 17px; color: #33301F; }
+
+  /* ═══════════════════ 07 · THE ESTATE MAP (cartography) ════════════════ */
+  .mapd { background: radial-gradient(900px 480px at 40% 30%, #F1E5C6, #E7D7AE 75%, #DCC894); color: #3B2F1E; border-radius: 3px; padding: 22px 26px; font-family: "Cormorant Garamond", serif; box-shadow: 0 14px 40px rgba(0,0,0,.5); border: 1px solid #B9A26E; position: relative; overflow: hidden; }
+  .mapd::before { content: ""; position: absolute; inset: 8px; border: 2px solid rgba(59,47,30,.5); outline: 1px solid rgba(59,47,30,.3); outline-offset: 3px; pointer-events: none; }
+  .mapd h3 { text-align: center; font-size: 19px; letter-spacing: 6px; font-variant: small-caps; margin-bottom: 2px; }
+  .mapd .sub { text-align: center; font-style: italic; font-size: 13px; color: #6E5B3A; margin-bottom: 10px; }
+  .mapwrap { position: relative; height: 300px; }
+  .landmass { position: absolute; background: #EADFBE; border: 2px solid #3B2F1E; box-shadow: 3px 3px 0 rgba(59,47,30,.18); }
+  .land-aws { left: 4%; top: 26px; width: 40%; height: 210px; border-radius: 46% 54% 60% 40% / 55% 45% 62% 38%; }
+  .land-gcp { right: 26%; top: 44px; width: 21%; height: 130px; border-radius: 55% 45% 40% 60% / 48% 60% 40% 52%; }
+  .landname { position: absolute; font-variant: small-caps; letter-spacing: 4px; font-size: 15px; }
+  .outpost { position: absolute; font-family: "IBM Plex Mono", monospace; font-size: 9px; letter-spacing: .5px; }
+  .outpost::before { content: "◉"; margin-right: 4px; font-size: 10px; }
+  .route { position: absolute; border-top: 2.5px dashed rgba(59,47,30,.75); }
+  .dragons { position: absolute; right: 12px; bottom: 26px; width: 24%; text-align: center; font-style: italic; font-size: 14px; color: #6E5B3A; }
+  .dragons .serpent { font-size: 26px; line-height: 1; }
+  .compass { position: absolute; left: 18px; bottom: 18px; width: 62px; height: 62px; border: 2px solid #3B2F1E; border-radius: 50%; }
+  .compass::before { content: "N"; position: absolute; top: -2px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 600; }
+  .compass::after { content: ""; position: absolute; left: 50%; top: 50%; width: 2px; height: 44px; background: #3B2F1E; transform: translate(-50%,-50%); clip-path: polygon(0 0, 100% 0, 100% 55%, 0 55%); }
+  .journal { position: absolute; right: 16px; top: 34px; width: 200px; font-family: "Caveat", cursive; font-size: 15.5px; line-height: 1.45; color: #4A3A22; transform: rotate(-1.6deg); }
+
+  /* ═══════════════════ 08 · SEISMOGRAPH (observatory) ═══════════════════ */
+  .seis { background: #F5F0DF; color: #2E2A20; border-radius: 4px; padding: 20px 24px; font-family: "IBM Plex Sans", sans-serif; box-shadow: 0 14px 40px rgba(0,0,0,.5); border: 1px solid #CCC2A4; }
+  .seis .plaque { display: inline-block; background: #2E2A20; color: #E8E0C8; font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: 2.5px; padding: 6px 14px; border-radius: 2px; margin-bottom: 14px; }
+  .drum { position: relative; background: repeating-linear-gradient(to bottom, transparent 0 17px, rgba(46,42,32,.13) 17px 18px), repeating-linear-gradient(to right, transparent 0 17px, rgba(46,42,32,.09) 17px 18px), #FBF7E9; border: 1px solid #CCC2A4; border-radius: 3px; padding: 6px 0; box-shadow: inset 0 6px 14px rgba(46,42,32,.10), inset 0 -6px 14px rgba(46,42,32,.10); }
+  .drum svg { display: block; width: 100%; height: 130px; }
+  .drum .ev { position: absolute; font-family: "IBM Plex Mono", monospace; font-size: 9.5px; color: #8C5B2E; letter-spacing: .5px; }
+  .seis .legend { display: flex; gap: 26px; margin-top: 12px; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: #6E664E; }
+  .seis .legend b { color: #2E2A20; font-weight: 600; }
+
+  .verdict { color: #888; font-size: 12.5px; margin-top: -32px; margin-bottom: 42px; }
+</style>
+</head>
+<body>
+  <div class="intro">
+    <h1>Batch 02 — five more, each one further off the map</h1>
+    <p>Same rule as before: every direction is grown from something PlainOps genuinely does, with one signature interaction nobody has shipped. All hand-drawn CSS.</p>
+  </div>
+
+  <!-- ════════ 04 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 04 · SIGNAL BOX</h2><span>deploys are routes through an interlocking — you can't pull a conflicting lever. Signature: deploying = pulling lever №4; the route lights section by section (build → push → roll → verify).</span></div>
+    <div class="sbox">
+      <div class="diagram">
+        <div class="d-title">ACME-STORE — ROUTE DIAGRAM · INTERLOCKED</div>
+        <div class="track">
+          <div class="rail main"></div>
+          <div class="rail loop"></div>
+          <div class="switch-line"></div>
+          <div class="seg-lit"></div>
+          <span class="stationlbl" style="left:8px; top:4px;">SOURCE</span>
+          <span class="stationlbl" style="left:238px; top:4px;">BUILD</span>
+          <span class="stationlbl" style="left:150px; top:66px; ">STAGING LOOP</span>
+          <span class="stationlbl" style="right:6px; top:4px;">PRODUCTION</span>
+          <div class="signal green" style="left:250px; top:12px;"></div>
+          <div class="signal red" style="right:64px; top:12px;"></div>
+        </div>
+      </div>
+      <div class="frame">
+        <div class="lever-slot"><div class="lever black"></div><div class="plate-num">1</div><div class="what">Points · staging</div></div>
+        <div class="lever-slot"><div class="lever blue pulled"></div><div class="plate-num">2</div><div class="what">Facing lock</div></div>
+        <div class="lever-slot"><div class="lever red pulled"></div><div class="plate-num">4</div><div class="what">Deploy signal</div></div>
+        <div class="lever-slot"><div class="lever red"></div><div class="plate-num">7</div><div class="what">Destroy · guarded</div></div>
+        <div class="block-inst">
+          <div class="brass"><div class="dial"><span class="l">TRAIN ON LINE</span><span class="c">LINE CLEAR</span><span class="r">NORMAL</span></div><div class="needle2"></div></div>
+          <div class="what">Block instrument · approval</div>
+        </div>
+      </div>
+      <div class="sill">BOX PO-BOM · ap-south-1 &nbsp;&nbsp;|&nbsp;&nbsp; ROUTE SET: SOURCE→BUILD &nbsp;·&nbsp; <b>lever 4 pulled — awaiting LINE CLEAR from founder</b></div>
+    </div>
+  </section>
+
+  <!-- ════════ 05 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 05 · MASTER CONTROL</h2><span>broadcast switchers have PREVIEW and PROGRAM buses with a TAKE bar between them — which is literally staging → production. Signature: promotion is the TAKE button; live = the ON AIR sign.</span></div>
+    <div class="mcr">
+      <div class="toprow">
+        <div class="onair"><div class="box">ON AIR</div><div class="sub">ACME-STORE · HTTP 200</div></div>
+        <div class="vu">
+          <div class="meter traffic"><div class="m-face"><div class="m-needle"></div></div><div class="m-lbl">REQ / MIN · 412</div></div>
+          <div class="meter errors"><div class="m-face"><div class="m-needle"></div></div><div class="m-lbl">ERROR RATE · 0.02%</div></div>
+        </div>
+      </div>
+      <div class="bus">
+        <div class="bus-lbl">PROGRAM — what the world sees</div>
+        <div class="keys"><div class="key pgm-live">v2.4.1</div><div class="key">v2.4.0</div><div class="key">v2.3.9</div><div class="key">v2.3.8</div></div>
+      </div>
+      <div class="bus">
+        <div class="bus-lbl">PREVIEW — staging bus</div>
+        <div class="keys"><div class="key pvw-live">v2.4.2-rc</div><div class="key">v2.4.1</div><div class="key">—</div><div class="key">—</div></div>
+      </div>
+      <div class="takebar">
+        <div class="take">TAKE</div>
+        <div class="note">cuts PREVIEW → PROGRAM after the sustained health watch.<br/><b>staging verified 14:22 · commit a2ee2b5 · founder approval required</b></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ 06 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 06 · HERBARIUM</h2><span>infrastructure, tended. Every service is a pressed specimen; replicas are leaves — scaling up literally grows the plant. Signature: a wilted leaf IS the incident, and diagnosis reads like a botanist's determination.</span></div>
+    <div class="herb">
+      <div class="sheet-title">PLAINOPS · HORTUS SICCUS · SHEET XLVII</div>
+      <div class="plantbox">
+        <div class="plant">
+          <svg width="86" height="120" viewBox="0 0 86 120"><path d="M43 118 C43 82 43 54 43 26" stroke="#4C5B33" stroke-width="2.2" fill="none"/><path d="M43 92 C28 86 18 74 16 60 C32 64 41 74 43 92" fill="#6D7F45"/><path d="M43 74 C58 68 68 56 70 42 C54 46 45 56 43 74" fill="#7E9052"/><path d="M43 52 C30 46 22 36 21 24 C35 28 42 38 43 52" fill="#8CA05C"/><path d="M43 26 C43 15 48 8 56 4 C56 15 51 23 43 26" fill="#9AB068"/></svg>
+          <span class="tape"></span>
+          <div class="pname">Gateway florens</div>
+          <div class="pstate">2 LEAVES · HEALTHY</div>
+        </div>
+        <div class="plant">
+          <svg width="86" height="120" viewBox="0 0 86 120"><path d="M43 118 C43 84 43 58 43 34" stroke="#4C5B33" stroke-width="2.2" fill="none"/><path d="M43 96 C29 90 20 78 18 64 C34 68 42 78 43 96" fill="#7E9052"/><path d="M43 66 C57 60 66 49 68 36 C53 40 45 50 43 66" fill="#8CA05C"/><path d="M43 34 L43 34 C46 22 54 16 62 14 C60 25 53 32 43 34" fill="#B8A24E" opacity=".8" transform="rotate(28 43 34)"/></svg>
+          <span class="tape"></span>
+          <div class="pname">Postgres sedecim</div>
+          <div class="pstate wilt">1 LEAF WILTING · CONN POOL 94%</div>
+        </div>
+      </div>
+      <div class="speclabel">
+        <div class="sl-head">Herbarium PlainOpsiense</div>
+        <table>
+          <tr><td>Family</td><td>databases</td></tr>
+          <tr><td>Species</td><td>postgres v16 (rds.t4g.micro)</td></tr>
+          <tr><td>Habitat</td><td>ap-south-1 · vpc po-acme-store</td></tr>
+          <tr><td>Collected</td><td>2026-07-20 · deploy №47</td></tr>
+          <tr><td>Condition</td><td>conn pool near limit — prune or repot (scale up)</td></tr>
+        </table>
+        <div class="det">det. <span class="sig">plainops</span> · countersigned <span class="sig">founder</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ 07 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 07 · THE ESTATE MAP</h2><span>your multi-cloud estate drawn as one surveyed map — outposts, supply routes, and honest cartography: clouds you haven't connected are uncharted water. Signature: the estate scan is a SURVEY that redraws the map.</span></div>
+    <div class="mapd">
+      <h3>The Founder's Estate</h3>
+      <div class="sub">being a true &amp; honest survey of all lands held in the cloud · surveyed by PlainOps, XX July MMXXVI</div>
+      <div class="mapwrap">
+        <div class="landmass land-aws"></div>
+        <span class="landname" style="left:16%; top:52px;">AMAZONIA</span>
+        <span class="outpost" style="left:11%; top:96px;">alb po-acme</span>
+        <span class="outpost" style="left:22%; top:132px;">ecs ×2</span>
+        <span class="outpost" style="left:13%; top:168px;">rds-16</span>
+        <div class="landmass land-gcp"></div>
+        <span class="landname" style="right:33%; top:66px; font-size:12px;">GOOGLIA</span>
+        <span class="outpost" style="right:30%; top:96px;">cloud run ×3</span>
+        <div class="route" style="left:43%; top:120px; width:12%; transform:rotate(-9deg);"></div>
+        <div class="dragons"><div class="serpent">🐉</div>AZVRE INCOGNITA<br/>here be dragons —<br/><span style="font-size:12px">no subscription connected</span></div>
+        <div class="compass"></div>
+        <div class="journal">Day 47 — the staging isle verified &amp; the route to production cut over. Two snapshots cached against storms. Spend holds at $38 the month.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ 08 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 08 · SEISMOGRAPH</h2><span>the watchtower as an observatory: every wobble in your infrastructure is recorded on the drum, forever. Signature: incidents are literal seismograms — a bad release reads like an earthquake, and the rollback is the aftershock fading to calm.</span></div>
+    <div class="seis">
+      <div class="plaque">STATION PO-BOM · ap-south-1 · DRUM 47 · 1 LINE = 1 HOUR</div>
+      <div class="drum">
+        <svg viewBox="0 0 1000 130" preserveAspectRatio="none">
+          <path d="M0 65 L180 65 L184 60 L188 70 L192 65 L420 65
+                   L424 52 L428 84 L432 30 L436 102 L440 22 L444 96 L448 44 L452 78 L456 56 L460 70 L464 62 L470 66 L480 65
+                   L700 65 L704 58 L708 73 L712 63 L716 68 L720 65 L1000 65"
+                fill="none" stroke="#2E2A20" stroke-width="1.6"/>
+        </svg>
+        <span class="ev" style="left:40%; top:2px;">14:41 — v2.4.2 FAILED WATCH · M4.6</span>
+        <span class="ev" style="left:69%; top:2px;">14:47 — ROLLBACK · aftershock</span>
+      </div>
+      <div class="legend">
+        <span><b>M1</b> log noise</span><span><b>M2</b> blip (tolerated)</span><span><b>M3</b> degraded</span><span><b>M4+</b> release event</span><span><b>M5</b> outage · red drum</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="verdict">Batch 01 is still at /design-directions.html · everything above is CSS + tiny inline SVG, zero images, zero libraries.</div>
+</body>
+</html>

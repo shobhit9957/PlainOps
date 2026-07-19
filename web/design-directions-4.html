@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PlainOps — design directions · batch 04 · TECHNICAL II</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #101013; color: #DDD; font-family: "IBM Plex Sans", sans-serif; padding: 30px 26px 60px; }
+  .intro h1 { font-size: 21px; margin-bottom: 4px; }
+  .intro p { color: #999; font-size: 13px; max-width: 900px; margin-bottom: 30px; }
+  .direction { margin-bottom: 48px; }
+  .direction > .label { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  .direction > .label h2 { font-size: 16px; color: #EEE; white-space: nowrap; }
+  .direction > .label span { font-size: 12.5px; color: #888; }
+
+  /* ═════════════ 13 · INIT SYSTEM (boot sequence) ═════════════ */
+  .boot { background: #0A0C0E; border: 1px solid #1B2026; border-radius: 6px; padding: 16px 18px; font-family: "IBM Plex Mono", monospace; font-size: 12px; line-height: 1.75; box-shadow: 0 14px 40px rgba(0,0,0,.55); }
+  .boot .bl { display: flex; gap: 10px; white-space: pre-wrap; }
+  .boot .ts { color: #4A5561; flex: 0 0 118px; text-align: right; }
+  .boot .ok { color: #3FB950; } .boot .fail { color: #F85149; } .boot .warn2 { color: #D29922; }
+  .boot .dim { color: #8B949E; }
+  .boot .unit-tree { margin: 14px 0 6px; padding: 12px 14px; background: #0D1117; border: 1px solid #1B2026; border-radius: 4px; }
+  .boot .u-line { display: flex; gap: 8px; }
+  .boot .dot-g { color: #3FB950; } .boot .dot-a { color: #D29922; }
+  .boot .u-meta { color: #8B949E; }
+  .boot .target { margin-top: 10px; color: #E6EDF3; }
+  .boot .target .ok { font-weight: 600; }
+
+  /* ═════════════ 14 · NOC / TRACEROUTE ═════════════ */
+  .noc { background: #0B1016; border: 1px solid #182230; border-radius: 6px; overflow: hidden; box-shadow: 0 14px 40px rgba(0,0,0,.55); font-family: "IBM Plex Mono", monospace; }
+  .noc .n-head { display: flex; gap: 18px; padding: 9px 16px; background: #0E141C; border-bottom: 1px solid #182230; font-size: 11px; color: #6E7F93; }
+  .noc .n-head b { color: #DCE6F2; font-weight: 500; }
+  .noc table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .noc th { text-align: left; padding: 8px 14px 6px; color: #4E6076; font-size: 9.5px; letter-spacing: 1.6px; border-bottom: 1px solid #182230; }
+  .noc td { padding: 6px 14px; border-bottom: 1px solid #10161E; color: #A8B7C7; }
+  .noc td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .noc .hopok { color: #46D39A; }
+  .noc .hoplbl { color: #DCE6F2; }
+  .noc .loss0 { color: #46D39A; } .noc .lossbad { color: #E0503C; }
+  .noc .pingrow { display: flex; gap: 3px; padding: 12px 14px 14px; align-items: center; }
+  .noc .pingrow .plbl { font-size: 10px; color: #6E7F93; margin-right: 10px; letter-spacing: 1px; }
+  .noc .pp { width: 12px; height: 16px; border-radius: 2px; background: #123B2A; }
+  .noc .pp.hot { background: #46D39A; }
+  .noc .pp.miss { background: #55231C; }
+
+  /* ═════════════ 15 · MERGE TO PRODUCTION (diff-native) ═════════════ */
+  .gh { background: #FFFFFF; color: #1F2328; border: 1px solid #D0D7DE; border-radius: 8px; overflow: hidden; box-shadow: 0 14px 40px rgba(0,0,0,.5); font-family: "IBM Plex Sans", sans-serif; display: flex; }
+  .gh .graph { flex: 0 0 74px; border-right: 1px solid #D0D7DE; background: #F6F8FA; position: relative; }
+  .gh .graph svg { display: block; width: 100%; height: 100%; min-height: 320px; }
+  .gh .gh-main { flex: 1; }
+  .gh .pr-head { padding: 14px 18px 10px; border-bottom: 1px solid #D0D7DE; }
+  .gh .pr-title { font-size: 15.5px; font-weight: 600; }
+  .gh .pr-title .num { color: #656D76; font-weight: 400; }
+  .gh .pr-sub { display: flex; gap: 8px; align-items: center; margin-top: 7px; font-size: 12px; color: #656D76; }
+  .gh .chip { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+  .gh .chip.open { background: #1F883D; color: #fff; }
+  .gh .chip.checks { background: #FFF8C5; color: #7D4E00; border: 1px solid #D4A72C66; }
+  .gh .mono { font-family: "IBM Plex Mono", monospace; }
+  .diff { margin: 12px 18px; border: 1px solid #D0D7DE; border-radius: 6px; overflow: hidden; font-family: "IBM Plex Mono", monospace; font-size: 11.5px; }
+  .diff .d-file { background: #F6F8FA; border-bottom: 1px solid #D0D7DE; padding: 6px 12px; font-size: 11px; color: #1F2328; }
+  .diff .hunk { background: #DDF4FF; color: #0550AE; padding: 2px 12px; }
+  .diff .ln { display: flex; }
+  .diff .ln .g { flex: 0 0 26px; text-align: center; color: #656D76; user-select: none; }
+  .diff .ln .c { flex: 1; padding: 1px 8px; white-space: pre; }
+  .diff .add { background: #DAFBE1; } .diff .add .g { background: #ACEEBB; color: #116329; }
+  .diff .del { background: #FFEBE9; } .diff .del .g { background: #FFCECB; color: #A40E26; }
+  .gh .review { margin: 0 18px 16px; border: 1px solid #D0D7DE; border-radius: 6px; padding: 12px 14px; display: flex; gap: 12px; align-items: center; background: #F6F8FA; }
+  .gh .review .shield { font-size: 20px; }
+  .gh .review .r-txt { font-size: 12.5px; line-height: 1.5; color: #1F2328; }
+  .gh .review .r-txt b { font-weight: 600; }
+  .gh .review .btns { margin-left: auto; display: flex; gap: 8px; }
+  .gh button { font: 600 12px "IBM Plex Sans", sans-serif; padding: 7px 14px; border-radius: 6px; cursor: pointer; border: 1px solid #D0D7DE; background: #F6F8FA; color: #24292F; }
+  .gh button.merge { background: #1F883D; border-color: #1F883D; color: #fff; }
+
+  /* ═════════════ 16 · API REFERENCE (three-pane docs) ═════════════ */
+  .docs { display: flex; background: #FFFFFF; color: #1F2328; border: 1px solid #E3E6EA; border-radius: 8px; overflow: hidden; box-shadow: 0 14px 40px rgba(0,0,0,.5); min-height: 330px; }
+  .docs .side { flex: 0 0 190px; border-right: 1px solid #E9ECEF; background: #FAFBFC; padding: 14px 0; font-size: 12.5px; }
+  .docs .side .s-h { font-size: 10px; letter-spacing: 1.6px; color: #8A929B; padding: 8px 18px 4px; }
+  .docs .side a { display: block; padding: 5px 18px; color: #40474F; text-decoration: none; }
+  .docs .side a.on { color: #0B57D0; background: #EBF2FE; border-right: 2px solid #0B57D0; font-weight: 600; }
+  .docs .mid { flex: 1.3; padding: 20px 24px; }
+  .docs .method { display: inline-block; font: 700 10.5px "IBM Plex Mono", monospace; letter-spacing: .5px; padding: 3px 8px; border-radius: 4px; background: #DAFBE1; color: #116329; margin-right: 8px; }
+  .docs .path { font-family: "IBM Plex Mono", monospace; font-size: 14px; font-weight: 600; }
+  .docs .desc2 { font-size: 12.5px; color: #57606A; line-height: 1.65; margin: 10px 0 16px; max-width: 480px; }
+  .docs .param-h { font-size: 10.5px; letter-spacing: 1.4px; color: #8A929B; border-bottom: 1px solid #E9ECEF; padding-bottom: 5px; margin-bottom: 8px; }
+  .docs .param { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid #F3F5F7; font-size: 12px; }
+  .docs .param .pn2 { font-family: "IBM Plex Mono", monospace; font-weight: 600; flex: 0 0 130px; }
+  .docs .param .pt { color: #8250DF; font-family: "IBM Plex Mono", monospace; flex: 0 0 74px; font-size: 11px; }
+  .docs .param .pd { color: #57606A; }
+  .docs .req { color: #CF222E; font-size: 10px; margin-left: 6px; }
+  .docs .code { flex: 1.1; background: #0D1117; color: #E6EDF3; padding: 18px 18px; font-family: "IBM Plex Mono", monospace; font-size: 11.5px; line-height: 1.75; }
+  .docs .code .c-h { display: flex; justify-content: space-between; color: #8B949E; font-size: 10px; letter-spacing: 1.4px; margin-bottom: 10px; }
+  .docs .code .k { color: #FF7B72; } .docs .code .s { color: #A5D6FF; } .docs .code .cm { color: #8B949E; } .docs .code .g2 { color: #3FB950; }
+  .docs .code .resp { border-top: 1px solid #21262D; margin-top: 12px; padding-top: 10px; }
+
+  .verdict { color: #888; font-size: 12.5px; margin-top: -32px; margin-bottom: 42px; }
+</style>
+</head>
+<body>
+  <div class="intro">
+    <h1>Batch 04 — TECHNICAL II. The screens engineers already live in.</h1>
+    <p>Batch 03 was instruments; this one is screen-native: an init system, a NOC console, a diff-first review UI, and reference documentation. Same rule — every element maps to a real PlainOps behavior.</p>
+  </div>
+
+  <!-- ════════ 13 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 13 · INIT SYSTEM</h2><span>a deploy IS a boot sequence — so the product speaks dmesg/systemd. Signature: every operation is a timestamped line with [ OK ]; your estate is `systemctl status` for the cloud; "Reached target Production" is the moment of truth.</span></div>
+    <div class="boot">
+      <div class="bl"><span class="ts">[    0.000000]</span><span class="dim">PLAINOPS init 47 — booting acme-store (ap-south-1)</span></div>
+      <div class="bl"><span class="ts">[    2.114508]</span><span><span class="ok">[  OK  ]</span> Mounted source tree (6 KB, zipped → s3://plainops-…/source.zip)</span></div>
+      <div class="bl"><span class="ts">[   41.383069]</span><span><span class="ok">[  OK  ]</span> Built image v1784475136258 (CodeBuild, remote — no local docker)</span></div>
+      <div class="bl"><span class="ts">[   96.700214]</span><span><span class="ok">[  OK  ]</span> Rolled ecs/po-acme-store — 2 tasks steady</span></div>
+      <div class="bl"><span class="ts">[  118.204551]</span><span><span class="warn2">[ WATCH]</span> Sustained gate: probing every 10 s × 12 …</span></div>
+      <div class="bl"><span class="ts">[  238.991402]</span><span><span class="ok">[  OK  ]</span> Gate passed 12/12 — HTTP 200, 0 error lines</span></div>
+      <div class="bl"><span class="ts">[  239.014772]</span><span class="dim">Previous boot 14:41 — v2.4.2 <span class="fail">[FAILED]</span> at gate check 20/42 → auto-reverted (see journal)</span></div>
+      <div class="unit-tree">
+        <div class="u-line"><span class="dot-g">●</span><span>gateway.service</span><span class="u-meta">— active (running) · 2 instances · :3000</span></div>
+        <div class="u-line"><span class="dot-g">●</span><span>orders.service</span><span class="u-meta">— active (running) · cloud-map orders.local</span></div>
+        <div class="u-line"><span class="dot-a">●</span><span>postgres16.service</span><span class="u-meta">— active (degraded) · conn pool 94% — journal hints: scale pool</span></div>
+        <div class="u-line"><span class="dot-g">●</span><span>staging.target</span><span class="u-meta">— reached · twin verified a2ee2b5</span></div>
+      </div>
+      <div class="target">Reached target <span class="ok">Production</span> in 3 min 59 s. &nbsp;<span class="dim">journalctl -u acme-store --since "today" for the full story.</span></div>
+    </div>
+  </section>
+
+  <!-- ════════ 14 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 14 · NOC CONSOLE</h2><span>deploys and diagnosis as network operations — the pipeline is a traceroute that completes hop by hop, with MTR loss/latency columns. Signature: an unreachable hop IS the diagnosis; the smoking gun is the row that starts dropping packets.</span></div>
+    <div class="noc">
+      <div class="n-head"><span>plainops-noc</span><b>trace deploy №47 → production</b><span>proto HTTPS · 12 probes/hop</span><b style="color:#46D39A">ROUTE COMPLETE</b></div>
+      <table>
+        <tr><th>HOP</th><th>NODE</th><th>LOSS%</th><th class="num" style="text-align:right">SNT</th><th class="num" style="text-align:right">LAST</th><th class="num" style="text-align:right">AVG</th><th class="num" style="text-align:right">BEST</th><th class="num" style="text-align:right">WRST</th></tr>
+        <tr><td>1</td><td><span class="hoplbl">workspace.local</span> · zip+scrub</td><td class="loss0">0.0%</td><td class="num">12</td><td class="num">0.4</td><td class="num">0.5</td><td class="num">0.3</td><td class="num">0.9</td></tr>
+        <tr><td>2</td><td><span class="hoplbl">codebuild.ap-south-1</span> · image v…6258</td><td class="loss0">0.0%</td><td class="num">12</td><td class="num">39.2</td><td class="num">41.0</td><td class="num">38.8</td><td class="num">44.1</td></tr>
+        <tr><td>3</td><td><span class="hoplbl">ecr.registry</span> · push :live +v-tag</td><td class="loss0">0.0%</td><td class="num">12</td><td class="num">8.8</td><td class="num">9.1</td><td class="num">8.2</td><td class="num">10.4</td></tr>
+        <tr><td>4</td><td><span class="hoplbl">ecs.cluster</span> · drain old / steady new</td><td class="loss0">0.0%</td><td class="num">12</td><td class="num">55.6</td><td class="num">57.9</td><td class="num">52.3</td><td class="num">63.0</td></tr>
+        <tr><td>5</td><td><span class="hoplbl">alb.edge</span> · target health 2/2</td><td class="loss0">0.0%</td><td class="num">12</td><td class="num">1.9</td><td class="num">2.2</td><td class="num">1.7</td><td class="num">3.0</td></tr>
+        <tr><td>6</td><td><span class="hopok">internet · verified HTTP 200 ×12</span></td><td class="loss0">0.0%</td><td class="num">12</td><td class="num">84</td><td class="num">88</td><td class="num">79</td><td class="num">96</td></tr>
+      </table>
+      <div class="pingrow"><span class="plbl">GATE PROBES →</span>
+        <span class="pp hot"></span><span class="pp hot"></span><span class="pp hot"></span><span class="pp hot"></span><span class="pp hot"></span><span class="pp hot"></span><span class="pp hot"></span><span class="pp hot"></span><span class="pp hot"></span><span class="pp hot"></span><span class="pp hot"></span><span class="pp hot"></span>
+        <span class="plbl" style="margin-left:16px">14:41 RUN →</span>
+        <span class="pp hot"></span><span class="pp hot"></span><span class="pp miss"></span><span class="pp miss"></span><span class="plbl" style="margin-left:8px; color:#E0503C">2 consecutive lost → REVERTED</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ 15 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 15 · MERGE TO PRODUCTION</h2><span>production is a protected branch — so the whole product is diff-native. Infra changes arrive as reviewable diffs, deploys are merges on the graph rail, approval is a review. Signature: EVERYTHING diffs, even cost: −$31.40 / +$38.20.</span></div>
+    <div class="gh">
+      <div class="graph">
+        <svg viewBox="0 0 74 330">
+          <path d="M37 0 V330" stroke="#D0D7DE" stroke-width="2"/>
+          <path d="M37 60 C37 90 58 92 58 122 V180 C58 214 37 216 37 248" stroke="#8250DF" stroke-width="2" fill="none"/>
+          <circle cx="37" cy="40" r="5.5" fill="#1F883D"/>
+          <circle cx="58" cy="150" r="5.5" fill="#8250DF"/>
+          <circle cx="37" cy="248" r="5.5" fill="#1F883D"/>
+          <circle cx="37" cy="300" r="5.5" fill="#CF222E"/>
+        </svg>
+      </div>
+      <div class="gh-main">
+        <div class="pr-head">
+          <div class="pr-title">Scale gateway to 2 tasks &amp; apply audit-log migrations <span class="num">#47</span></div>
+          <div class="pr-sub">
+            <span class="chip open">◉ Ready to deploy</span>
+            <span class="chip checks">● sustained gate will run post-merge</span>
+            <span><span class="mono">plainops</span> wants to merge into <span class="mono">production</span> from <span class="mono">staging</span></span>
+          </div>
+        </div>
+        <div class="diff">
+          <div class="d-file">infrastructure / po-acme-store.tfvars</div>
+          <div class="hunk">@@ ecs autoscaling @@</div>
+          <div class="ln del"><span class="g">−</span><span class="c">desired_count = 1</span></div>
+          <div class="ln add"><span class="g">+</span><span class="c">desired_count = 2</span></div>
+          <div class="hunk">@@ estimated monthly cost @@</div>
+          <div class="ln del"><span class="g">−</span><span class="c">$31.40 / month</span></div>
+          <div class="ln add"><span class="g">+</span><span class="c">$38.20 / month  (+$6.80)</span></div>
+        </div>
+        <div class="review">
+          <span class="shield">🛡</span>
+          <div class="r-txt"><b>Review required.</b> plainops has verified staging (HTTP 200, commit <span class="mono">a2ee2b5</span>) and requests your approval. Merging deploys through the sustained health gate — a failed gate auto-reverts this merge.</div>
+          <div class="btns"><button class="merge">Approve &amp; merge</button><button>Request changes</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ 16 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 16 · API REFERENCE</h2><span>the product as reference documentation — three-pane, dense, Stripe-docs bones. Signature: radical transparency — every button shows the EXACT operation it performs, requests on the left, the verified 200 on the right. The UI is the documentation.</span></div>
+    <div class="docs">
+      <div class="side">
+        <div class="s-h">CORE</div>
+        <a>analyze repo</a><a class="on">deploy application</a><a>safe deploy</a><a>run migrations</a>
+        <div class="s-h">DAY 2</div>
+        <a>run diagnosis</a><a>rollback</a><a>check drift</a><a>find savings</a>
+        <div class="s-h">ESTATE</div>
+        <a>environments</a><a>promote</a><a>teardown</a>
+      </div>
+      <div class="mid">
+        <div><span class="method">POST</span><span class="path">/deploy/acme-store</span></div>
+        <p class="desc2">Zips the workspace (secrets scrubbed), builds the image in <b>your</b> AWS account, rolls the service, and refuses to report success without a real HTTP 200. Requires founder approval — this documentation IS the approval card.</p>
+        <div class="param-h">PARAMETERS</div>
+        <div class="param"><span class="pn2">watch_seconds<span class="req">required</span></span><span class="pt">integer</span><span class="pd">sustained-gate window; 2 consecutive failed probes auto-revert</span></div>
+        <div class="param"><span class="pn2">migrate</span><span class="pt">boolean</span><span class="pd">snapshot first, then run detected migrations as a one-off task</span></div>
+        <div class="param"><span class="pn2">est_monthly</span><span class="pt">money</span><span class="pd">$38.20 — shown before anything is created</span></div>
+      </div>
+      <div class="code">
+        <div class="c-h"><span>WHAT ACTUALLY RUNS</span><span>audit.log №47</span></div>
+        <div><span class="cm"># build in YOUR account</span></div>
+        <div><span class="k">aws</span> codebuild start-build <span class="s">--project po-acme-store</span></div>
+        <div><span class="k">aws</span> ecs update-service <span class="s">--force-new-deployment</span></div>
+        <div><span class="cm"># the gate — no 200, no "live"</span></div>
+        <div><span class="k">probe</span> <span class="s">https://acme-store…</span> ×12 @10s</div>
+        <div class="resp">
+          <div><span class="g2">200 VERIFIED</span> <span class="cm">· 3 m 59 s</span></div>
+          <div>{ <span class="s">"status"</span>: <span class="s">"live"</span>, <span class="s">"gate"</span>: <span class="s">"12/12"</span>,</div>
+          <div>&nbsp;&nbsp;<span class="s">"revert_on_fail"</span>: <span class="k">true</span> }</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="verdict">Batches: 01 instruments-classic · 02 (parked) · 03 instruments-technical · 04 screen-native. All CSS + inline SVG.</div>
+</body>
+</html>

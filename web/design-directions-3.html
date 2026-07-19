@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PlainOps — design directions · batch 03 · TECHNICAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Archivo:wght@600;700&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #101013; color: #DDD; font-family: "IBM Plex Sans", sans-serif; padding: 30px 26px 60px; }
+  .intro h1 { font-size: 21px; margin-bottom: 4px; }
+  .intro p { color: #999; font-size: 13px; max-width: 900px; margin-bottom: 30px; }
+  .direction { margin-bottom: 48px; }
+  .direction > .label { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  .direction > .label h2 { font-size: 16px; color: #EEE; white-space: nowrap; }
+  .direction > .label span { font-size: 12.5px; color: #888; }
+  .mono { font-family: "IBM Plex Mono", monospace; }
+
+  /* ═════════════════ 09 · LOGIC ANALYZER ═════════════════ */
+  .la { background: #0B0D0F; border: 1px solid #1E2328; border-radius: 6px; padding: 0; overflow: hidden; box-shadow: 0 14px 40px rgba(0,0,0,.55); font-family: "IBM Plex Mono", monospace; }
+  .la .la-top { display: flex; align-items: center; gap: 14px; padding: 9px 16px; border-bottom: 1px solid #1E2328; background: #0E1114; font-size: 11px; color: #7C8894; }
+  .la .la-top .dev { color: #E6EDF3; font-weight: 600; letter-spacing: .5px; }
+  .la .trig { margin-left: auto; color: #46D39A; border: 1px solid #24513E; background: #0D1F18; padding: 2px 10px; border-radius: 3px; font-size: 10.5px; letter-spacing: 1.5px; }
+  .la .stop { color: #E0503C; border: 1px solid #55231C; background: #1D0F0C; padding: 2px 10px; border-radius: 3px; font-size: 10.5px; letter-spacing: 1.5px; }
+  .la .scope { position: relative; padding: 14px 16px 8px 118px;
+    background:
+      repeating-linear-gradient(to right, rgba(124,136,148,.10) 0 1px, transparent 1px 56px),
+      repeating-linear-gradient(to bottom, rgba(124,136,148,.07) 0 1px, transparent 1px 34px),
+      #0B0D0F; }
+  .la .ch { position: relative; height: 34px; }
+  .la .ch .chlbl { position: absolute; left: -104px; top: 8px; width: 92px; font-size: 10px; letter-spacing: .5px; color: #7C8894; text-align: right; }
+  .la .ch .chlbl b { display: block; color: #E6EDF3; font-weight: 500; }
+  .la .ch svg { display: block; width: 100%; height: 34px; }
+  .la .cursorline { position: absolute; top: 10px; bottom: 34px; width: 1px; background: #E8B33B; }
+  .la .cursorline::after { content: attr(data-t); position: absolute; top: -12px; left: -14px; font-size: 9px; color: #E8B33B; }
+  .la .readout { display: flex; gap: 22px; padding: 9px 16px 11px; border-top: 1px solid #1E2328; background: #0E1114; font-size: 10.5px; color: #7C8894; }
+  .la .readout b { color: #E6EDF3; font-weight: 500; }
+  .la .readout .g { color: #46D39A; }
+  .la .readout .a { color: #E8B33B; }
+
+  /* ═════════════════ 10 · RACK ELEVATION ═════════════════ */
+  .rack-wrap { display: flex; gap: 20px; background: #15171A; border: 1px solid #26292E; border-radius: 6px; padding: 20px 24px; box-shadow: 0 14px 40px rgba(0,0,0,.55); }
+  .rack { flex: 0 0 380px; background: #1B1E22; border: 2px solid #34383E; border-radius: 4px; padding: 10px 34px; position: relative; }
+  .rack::before, .rack::after { content: ""; position: absolute; top: 8px; bottom: 8px; width: 14px; background: repeating-linear-gradient(to bottom, transparent 0 5px, #101215 5px 9px, transparent 9px 14px), #26292E; border: 1px solid #101215; border-radius: 2px; }
+  .rack::before { left: 8px; } .rack::after { right: 8px; }
+  .unum { position: absolute; left: 26px; font-size: 8.5px; color: #565D66; font-family: "IBM Plex Mono", monospace; }
+  .ru { position: relative; margin: 5px 0; border-radius: 2px; border: 1px solid #0D0F11; padding: 8px 12px 7px; background: linear-gradient(180deg, #262A2F, #1E2126); box-shadow: inset 0 1px 0 rgba(255,255,255,.05); display: flex; align-items: center; gap: 10px; }
+  .ru.u2 { padding-top: 16px; padding-bottom: 15px; }
+  .ru .vents { position: absolute; right: 10px; top: 6px; bottom: 6px; width: 66px; background: repeating-linear-gradient(90deg, rgba(0,0,0,.5) 0 2px, transparent 2px 5px); border-radius: 1px; opacity: .6; }
+  .ru .led { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .ru .led.g { background: #46D39A; box-shadow: 0 0 6px rgba(70,211,154,.9); animation: hb 2.4s ease-in-out infinite; }
+  .ru .led.a { background: #E8B33B; box-shadow: 0 0 6px rgba(232,179,59,.9); animation: hb 1.1s ease-in-out infinite; }
+  .ru .led.off { background: #34383E; }
+  @keyframes hb { 50% { opacity: .35; } }
+  .ru .ru-id { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: #E6EDF3; letter-spacing: .5px; }
+  .ru .ru-sub { font-family: "IBM Plex Mono", monospace; font-size: 9px; color: #737B85; }
+  .ru.empty { background: #17191D; border-style: dashed; border-color: #2C3036; justify-content: center; }
+  .ru.empty .ru-id { color: #565D66; font-size: 9.5px; letter-spacing: 2px; }
+  .rack-side { flex: 1; font-family: "IBM Plex Mono", monospace; }
+  .rack-side h4 { font-family: "Archivo", sans-serif; font-size: 11px; letter-spacing: 2.5px; color: #737B85; margin-bottom: 12px; }
+  .kv { display: flex; justify-content: space-between; font-size: 11.5px; padding: 5px 0; border-bottom: 1px solid #22252A; color: #9AA3AD; }
+  .kv b { color: #E6EDF3; font-weight: 500; }
+  .loadbar { height: 8px; border-radius: 2px; background: #22252A; margin: 14px 0 4px; overflow: hidden; }
+  .loadbar i { display: block; height: 100%; width: 34%; background: #46D39A; }
+  .rack-side .cap { font-size: 9.5px; color: #565D66; }
+  .rack-side .act { margin-top: 16px; display: flex; gap: 8px; }
+  .rack-side button { font: 600 10.5px "IBM Plex Mono", monospace; letter-spacing: 1.2px; padding: 8px 14px; border-radius: 3px; cursor: pointer; border: 1px solid #34383E; background: #22252A; color: #C9D1D9; }
+  .rack-side button.primary { background: #1F6FEB; border-color: #1F6FEB; color: #fff; }
+
+  /* ═════════════════ 11 · SCHEMATIC + DRC ═════════════════ */
+  .sch { background: #F7F8F5; color: #1A1C18; border: 1px solid #C9CEC2; border-radius: 4px; display: flex; box-shadow: 0 14px 40px rgba(0,0,0,.5); overflow: hidden; }
+  .sch .sheet { flex: 1.5; position: relative; padding: 24px; min-height: 300px;
+    background: radial-gradient(circle, rgba(26,28,24,.14) 1px, transparent 1px);
+    background-size: 22px 22px; }
+  .comp { position: absolute; border: 2px solid #1A1C18; background: #FFFFFF; padding: 8px 12px; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; line-height: 1.6; }
+  .comp .refdes { position: absolute; top: -16px; left: 0; font-size: 10px; font-weight: 600; color: #8A4B0F; }
+  .comp b { font-weight: 600; }
+  .net { position: absolute; background: #1A1C18; }
+  .net.h { height: 2px; } .net.v { width: 2px; }
+  .junction { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: #1A1C18; }
+  .netlbl { position: absolute; font-family: "IBM Plex Mono", monospace; font-size: 9px; color: #145C9E; letter-spacing: .4px; background: #F7F8F5; padding: 0 3px; }
+  .drcpin { position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #E0503C; color: #fff; font: 700 10px/16px "IBM Plex Mono", monospace; text-align: center; box-shadow: 0 0 0 4px rgba(224,80,60,.25); }
+  .drcpin.warn { background: #C87E1B; box-shadow: 0 0 0 4px rgba(200,126,27,.25); }
+  .sch .drc { flex: 1; border-left: 1px solid #C9CEC2; background: #FFFFFF; padding: 16px 18px; font-family: "IBM Plex Mono", monospace; }
+  .sch .drc h4 { font-family: "IBM Plex Sans", sans-serif; font-size: 11px; letter-spacing: 2px; color: #6B7062; margin-bottom: 4px; }
+  .sch .drc .verdict-line { font-size: 11px; margin-bottom: 12px; color: #1A1C18; }
+  .drc-item { display: flex; gap: 9px; font-size: 10.5px; line-height: 1.55; padding: 8px 0; border-top: 1px dashed #D8DCD0; color: #3A3E34; }
+  .drc-item .n { flex-shrink: 0; width: 16px; height: 16px; border-radius: 50%; color: #fff; text-align: center; font-weight: 700; line-height: 16px; font-size: 9.5px; }
+  .drc-item .n.err { background: #E0503C; } .drc-item .n.warn { background: #C87E1B; }
+  .drc .drc-act { margin-top: 14px; display: flex; gap: 8px; }
+  .drc button { font: 600 10.5px "IBM Plex Mono", monospace; letter-spacing: 1px; padding: 8px 13px; cursor: pointer; border: 1.5px solid #1A1C18; background: #1A1C18; color: #F7F8F5; border-radius: 2px; }
+  .drc button.ghost { background: transparent; color: #1A1C18; }
+
+  /* ═════════════════ 12 · DATASHEET ═════════════════ */
+  .ds { background: #FFFFFF; color: #16181D; border-radius: 3px; box-shadow: 0 14px 40px rgba(0,0,0,.5); font-family: "IBM Plex Sans", sans-serif; overflow: hidden; }
+  .ds .ds-band { display: flex; justify-content: space-between; align-items: baseline; background: #16181D; color: #fff; padding: 10px 22px; }
+  .ds .ds-band .pn { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 14px; letter-spacing: .5px; }
+  .ds .ds-band .rev { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: #9AA3AD; }
+  .ds .ds-body { display: grid; grid-template-columns: 1.35fr 1fr; gap: 0; }
+  .ds .ds-main { padding: 18px 22px; border-right: 1px solid #E2E4E8; }
+  .ds h3 { font-size: 12px; margin: 0 0 8px; }
+  .ds h3 .sec { color: #B04A17; margin-right: 8px; font-family: "IBM Plex Mono", monospace; }
+  .ds p.desc { font-size: 12px; color: #4A4F58; line-height: 1.6; margin-bottom: 16px; max-width: 520px; }
+  .ds table { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-bottom: 4px; }
+  .ds th { text-align: left; font-size: 10px; letter-spacing: 1.2px; color: #6C7280; border-top: 2px solid #16181D; border-bottom: 1px solid #16181D; padding: 5px 8px; }
+  .ds td { border-bottom: 1px solid #E2E4E8; padding: 6px 8px; font-family: "IBM Plex Mono", monospace; font-size: 11px; }
+  .ds td:first-child { font-family: "IBM Plex Sans", sans-serif; }
+  .ds .num { text-align: right; }
+  .ds .fn { font-size: 9.5px; color: #6C7280; margin: 6px 0 0; }
+  .ds .fn sup { color: #B04A17; }
+  .ds .ds-aside { padding: 18px 22px; }
+  .ds .revrow td { font-size: 10.5px; }
+  .ds .live-flag { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 10px; font-weight: 600; letter-spacing: 1px; color: #0E7A46; border: 1.5px solid #0E7A46; padding: 1px 8px; border-radius: 2px; }
+  .ds .rev-void { color: #B04A17; }
+  .ds .order { margin-top: 14px; background: #F6F7F9; border: 1px solid #E2E4E8; padding: 12px 14px; }
+  .ds .order .o-line { display: flex; justify-content: space-between; font-family: "IBM Plex Mono", monospace; font-size: 11px; padding: 2.5px 0; }
+  .ds .order .o-line.total { border-top: 1px solid #16181D; margin-top: 6px; padding-top: 7px; font-weight: 600; }
+  .ds .ds-foot { border-top: 1px solid #E2E4E8; padding: 8px 22px; display: flex; justify-content: space-between; font-family: "IBM Plex Mono", monospace; font-size: 9.5px; color: #6C7280; }
+
+  .verdict { color: #888; font-size: 12.5px; margin-top: -32px; margin-bottom: 42px; }
+</style>
+</head>
+<body>
+  <div class="intro">
+    <h1>Batch 03 — TECHNICAL. Instruments and documents engineers already trust.</h1>
+    <p>No metaphors from outside engineering. Four languages: a logic analyzer, a rack elevation, a schematic with DRC, and a component datasheet. Each maps 1:1 onto something PlainOps really does.</p>
+  </div>
+
+  <!-- ════════ 09 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 09 · LOGIC ANALYZER</h2><span>the deploy pipeline as a timing diagram — build/push/roll/verify are signal edges; the sustained health gate is the trigger condition. Signature: TRIG'D means verified live; a failed release shows as a glitch pulse you can cursor-measure.</span></div>
+    <div class="la">
+      <div class="la-top"><span class="dev">PLAINOPS LA-7717</span><span>acme-store · run №47</span><span>1 div = 60 s</span><span class="trig">TRIG'D · HTTP 200 ×12</span></div>
+      <div class="scope">
+        <div class="cursorline" style="left: 41%;" data-t="t₁"></div>
+        <div class="cursorline" style="left: 76.5%;" data-t="t₂"></div>
+        <div class="ch"><div class="chlbl"><b>CH1 BUILD</b>codebuild</div>
+          <svg viewBox="0 0 1000 34" preserveAspectRatio="none"><path d="M0 28 L60 28 L60 8 L305 8 L305 28 L1000 28" fill="none" stroke="#46D39A" stroke-width="2"/></svg></div>
+        <div class="ch"><div class="chlbl"><b>CH2 PUSH</b>ecr :v-tag</div>
+          <svg viewBox="0 0 1000 34" preserveAspectRatio="none"><path d="M0 28 L305 28 L305 8 L392 8 L392 28 L1000 28" fill="none" stroke="#3FB6E8" stroke-width="2"/></svg></div>
+        <div class="ch"><div class="chlbl"><b>CH3 ROLL</b>ecs stable</div>
+          <svg viewBox="0 0 1000 34" preserveAspectRatio="none"><path d="M0 28 L392 28 L392 8 L640 8 L640 28 L1000 28" fill="none" stroke="#C77DFF" stroke-width="2"/></svg></div>
+        <div class="ch"><div class="chlbl"><b>CH4 HTTP</b>gate probe</div>
+          <svg viewBox="0 0 1000 34" preserveAspectRatio="none"><path d="M0 28 L410 28 L410 8 L455 8 L455 28 L470 28 L470 8 L1000 8" fill="none" stroke="#E8B33B" stroke-width="2"/></svg></div>
+      </div>
+      <div class="readout">
+        <span>Δt(t₁→t₂) <b>3 m 32 s</b></span><span>edges <b>7</b></span><span>glitch @14:41 <b class="a">45 s</b> (reverted)</span><span>gate <b class="g">12/12 HIGH</b></span><span>state <b class="g">VERIFIED LIVE</b></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ 10 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 10 · RACK ELEVATION</h2><span>the cloud rendered as the thing it secretly is — racked hardware. Services are faceplates with heartbeat LEDs; provisioning racks a unit in, teardown de-racks it. Signature: your whole estate reads at a glance like a datacenter row.</span></div>
+    <div class="rack-wrap">
+      <div class="rack">
+        <span class="unum" style="top:16px">U12</span>
+        <div class="ru"><span class="led g"></span><div><div class="ru-id">PO-ALB-01 · edge</div><div class="ru-sub">http :80 → tg 2/2 healthy</div></div><div class="vents"></div></div>
+        <div class="ru u2"><span class="led g"></span><div><div class="ru-id">PO-ECS-GATEWAY ×2 · 2U</div><div class="ru-sub">fargate 0.25vCPU · rollout COMPLETED</div></div><div class="vents"></div></div>
+        <div class="ru"><span class="led g"></span><div><div class="ru-id">PO-ECS-ORDERS</div><div class="ru-sub">cloud-map orders.local</div></div><div class="vents"></div></div>
+        <div class="ru u2"><span class="led a"></span><div><div class="ru-id">PO-RDS-16 · 2U</div><div class="ru-sub">conn pool 94% — attention</div></div><div class="vents"></div></div>
+        <div class="ru empty"><div class="ru-id">U3–U4 · EMPTY · RACK A STAGING TWIN HERE</div></div>
+        <span class="unum" style="bottom:14px">U1</span>
+      </div>
+      <div class="rack-side">
+        <h4>RACK PO-BOM-A · ap-south-1</h4>
+        <div class="kv"><span>units occupied</span><b>8 / 12</b></div>
+        <div class="kv"><span>est. power draw ($/mo)</span><b>38.20</b></div>
+        <div class="kv"><span>alarms</span><b>1 amber · rds pool</b></div>
+        <div class="kv"><span>last change</span><b>№47 deploy · verified</b></div>
+        <div class="loadbar"><i></i></div>
+        <div class="cap">BUDGET LOAD 34% OF $60 CEILING</div>
+        <div class="act"><button class="primary">RACK IN UNIT…</button><button>DE-RACK</button><button>INSPECT</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ 11 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 11 · SCHEMATIC + DRC</h2><span>infrastructure as a circuit schematic — components with reference designators, DATABASE_URL is literally a net label, and preflight_launch is the Design Rule Check. Signature: approval = "commit to fab"; DRC pins errors straight onto the drawing.</span></div>
+    <div class="sch">
+      <div class="sheet">
+        <div class="comp" style="left:26px; top:44px; width:118px;"><span class="refdes">U1</span><b>ALB</b><br/>:80 in<br/>:3000 out</div>
+        <div class="comp" style="left:226px; top:30px; width:132px;"><span class="refdes">U2</span><b>ECS FARGATE</b><br/>0.25 vCPU ×2<br/>min 1 · max 4</div>
+        <div class="comp" style="left:226px; top:170px; width:132px;"><span class="refdes">U3</span><b>RDS PG16</b><br/>t4g.micro<br/>PITR 7d</div>
+        <div class="comp" style="left:452px; top:44px; width:108px;"><span class="refdes">J1</span><b>INTERNET</b><br/>0.0.0.0/0</div>
+        <div class="net h" style="left:144px; top:78px; width:82px;"></div>
+        <div class="net h" style="left:358px; top:78px; width:94px;"></div>
+        <div class="net v" style="left:290px; top:104px; height:66px;"></div>
+        <div class="junction" style="left:287px; top:75px;"></div>
+        <span class="netlbl" style="left:162px; top:64px;">HTTP_3000</span>
+        <span class="netlbl" style="left:300px; top:126px;">DATABASE_URL</span>
+        <div class="drcpin warn" style="left:338px; top:196px;">2</div>
+        <div class="drcpin" style="left:540px; top:36px;">1</div>
+      </div>
+      <div class="drc">
+        <h4>DESIGN RULE CHECK — preflight_launch</h4>
+        <div class="verdict-line">2 findings · 0 blockers · sheet may be committed</div>
+        <div class="drc-item"><span class="n err">1</span><span>J1: security group open on 0.0.0.0/0 :80 — intended for a public site; TLS termination not yet drawn (setup_custom_domain adds :443).</span></div>
+        <div class="drc-item"><span class="n warn">2</span><span>U3: connection pool math — 2 tasks × 5 conns ≤ t4g.micro limit ✓, but autoscale max 4 approaches ceiling. Consider pool 3/task.</span></div>
+        <div class="drc-act"><button>COMMIT TO FAB (approve)</button><button class="ghost">RE-CHECK</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ 12 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 12 · DATASHEET</h2><span>every project is a component with a living datasheet — autoscaling is literally a MIN/TYP/MAX parameter table, deploy history is the revision table, pricing is ordering information. Signature: the whole product reads like documentation you'd cite.</span></div>
+    <div class="ds">
+      <div class="ds-band"><span class="pn">PO-ACME-STORE</span><span>Production System · Container + RDS</span><span class="rev">REV C · 2026-07-20 · SHEET 1 OF 1</span></div>
+      <div class="ds-body">
+        <div class="ds-main">
+          <h3><span class="sec">1</span>DESCRIPTION</h3>
+          <p class="desc">Node.js storefront on ECS Fargate behind an application load balancer, PostgreSQL 16 primary store. Deployed and verified by PlainOps; every revision below carried a real HTTP 200 before release.</p>
+          <h3><span class="sec">2</span>OPERATING CHARACTERISTICS</h3>
+          <table>
+            <tr><th>PARAMETER</th><th class="num">MIN</th><th class="num">TYP</th><th class="num">MAX</th><th>UNIT</th></tr>
+            <tr><td>Task count (autoscale)</td><td class="num">1</td><td class="num">2</td><td class="num">4</td><td>tasks</td></tr>
+            <tr><td>vCPU per task</td><td class="num">—</td><td class="num">0.25</td><td class="num">—</td><td>vCPU</td></tr>
+            <tr><td>p95 latency, / route<sup>1</sup></td><td class="num">—</td><td class="num">84</td><td class="num">210</td><td>ms</td></tr>
+            <tr><td>DB connections<sup>2</sup></td><td class="num">2</td><td class="num">10</td><td class="num">81</td><td>conns</td></tr>
+            <tr><td>Monthly cost</td><td class="num">31.40</td><td class="num">38.20</td><td class="num">55.00</td><td>USD</td></tr>
+          </table>
+          <p class="fn"><sup>1</sup> measured at the gate, 12-probe sustained watch &nbsp;&nbsp;<sup>2</sup> t4g.micro ceiling; preflight recomputes on scale changes</p>
+        </div>
+        <div class="ds-aside">
+          <h3><span class="sec">3</span>REVISION HISTORY</h3>
+          <table>
+            <tr><th>REV</th><th>DATE·TIME</th><th>NOTE</th><th></th></tr>
+            <tr class="revrow"><td>C</td><td>14:26</td><td>v2.4.1 + migrations (snap first)</td><td><span class="live-flag">LIVE ✓200</span></td></tr>
+            <tr class="revrow"><td>B́</td><td>14:41</td><td class="rev-void">v2.4.2 — failed watch 20/42 · auto-reverted</td><td></td></tr>
+            <tr class="revrow"><td>B</td><td>13:58</td><td>staging promoted, commit a2ee2b5</td><td></td></tr>
+            <tr class="revrow"><td>A</td><td>13:07</td><td>initial provision · 31 resources</td><td></td></tr>
+          </table>
+          <h3 style="margin-top:14px"><span class="sec">4</span>ORDERING INFORMATION</h3>
+          <div class="order">
+            <div class="o-line"><span>ECS Fargate 0.25 vCPU ×2</span><span>9.20</span></div>
+            <div class="o-line"><span>RDS db.t4g.micro</span><span>13.10</span></div>
+            <div class="o-line"><span>ALB + LCU</span><span>16.30</span></div>
+            <div class="o-line total"><span>EST / MONTH</span><span>USD 38.60</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="ds-foot"><span>PLAINOPS · SOURCE-AVAILABLE · CREDENTIALS NEVER LEAVE THE MACHINE</span><span>SUBMIT CHANGES FOR APPROVAL — NO REVISION SHIPS UNVERIFIED</span></div>
+    </div>
+  </section>
+
+  <div class="verdict">Batches: 01 /design-directions.html · 02 /design-directions-2.html · 03 here. All CSS + inline SVG, no images, no libraries.</div>
+</body>
+</html>

@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PlainOps — three original design directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Courier+Prime:wght@400;700&family=Saira+Semi+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;650&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #101013; color: #DDD; font-family: "IBM Plex Sans", sans-serif; padding: 30px 26px 60px; }
+  .intro h1 { font-size: 21px; margin-bottom: 4px; }
+  .intro p { color: #999; font-size: 13px; max-width: 860px; margin-bottom: 30px; }
+  .direction { margin-bottom: 46px; }
+  .direction > .label {
+    display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px;
+  }
+  .direction > .label h2 { font-size: 16px; color: #EEE; }
+  .direction > .label span { font-size: 12.5px; color: #888; }
+
+  /* ══════════════════════════ 1 · FLIGHT DECK ═══════════════════════════ */
+  .deck {
+    background: #23261F;
+    border-radius: 6px;
+    padding: 18px;
+    font-family: "Archivo", sans-serif;
+    color: #D8DCC9;
+    border: 1px solid #0C0D0A;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 14px 40px rgba(0,0,0,.5);
+  }
+  .plate {
+    position: relative;
+    background: linear-gradient(180deg, #2B2F26, #24271F);
+    border: 1px solid #14160F;
+    border-radius: 5px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.08), inset 0 -2px 4px rgba(0,0,0,.35);
+    padding: 14px 16px 14px;
+  }
+  .plate::before, .plate::after,
+  .plate .screw-b::before, .plate .screw-b::after {
+    content: ""; position: absolute; width: 7px; height: 7px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #6A705C, #23261D 70%);
+    box-shadow: inset 0 0 0 1px #101208;
+  }
+  .plate::before { top: 5px; left: 5px; } .plate::after { top: 5px; right: 5px; }
+  .plate .screw-b::before { bottom: 5px; left: 5px; top: auto; } .plate .screw-b::after { bottom: 5px; right: 5px; top: auto; }
+  .deck-grid { display: grid; grid-template-columns: 250px 1fr 285px; gap: 14px; }
+  .deck .tag {
+    font-size: 9.5px; letter-spacing: 2.2px; color: #9AA284; font-weight: 700;
+    border-bottom: 1px solid #383D2F; padding-bottom: 6px; margin-bottom: 10px;
+  }
+  .deck .sysrow { display: flex; justify-content: space-between; align-items: center; padding: 4.5px 0; font-size: 12px; letter-spacing: .4px; }
+  .deck .sysrow b { font-weight: 500; color: #AEB49B; }
+  .lamp {
+    font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: 1px;
+    padding: 3px 9px; border-radius: 2px; border: 1px solid #101208;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.5);
+  }
+  .lamp.green { background: #1E3524; color: #7BE58A; text-shadow: 0 0 7px rgba(123,229,138,.6); }
+  .lamp.amber { background: #3A2F14; color: #FFC64B; text-shadow: 0 0 7px rgba(255,198,75,.55); animation: blink 1.6s step-end infinite; }
+  .lamp.off   { background: #1B1D16; color: #565B49; }
+  @keyframes blink { 50% { opacity: .55; } }
+  .deck .gauge-wrap { display: flex; gap: 14px; align-items: center; margin-top: 10px; }
+  .gauge {
+    width: 74px; height: 74px; border-radius: 50%;
+    background:
+      radial-gradient(circle at 50% 50%, #171911 58%, transparent 59%),
+      conic-gradient(from 220deg, #7BE58A 0 96deg, #FFC64B 96deg 130deg, #E8543F 130deg 160deg, #14160F 160deg 360deg);
+    border: 2px solid #0F110B;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,.6);
+    position: relative;
+  }
+  .gauge .needle {
+    position: absolute; left: 50%; top: 50%; width: 2px; height: 30px;
+    background: #E8E4D2; transform-origin: 50% 0%; transform: rotate(122deg);
+    box-shadow: 0 0 3px rgba(0,0,0,.8);
+  }
+  .gauge .hub { position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px; border-radius: 50%; background: #43483A; border: 1px solid #0F110B; }
+  .deck .gauge-read { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: #AEB49B; line-height: 1.9; }
+  .deck .gauge-read b { color: #E8E4D2; font-size: 14px; }
+  /* the guarded approval switch — the signature */
+  .guard-block { text-align: center; }
+  .guard-title { font-size: 10px; letter-spacing: 2.4px; color: #FFC64B; font-weight: 700; margin-bottom: 4px; }
+  .guard-sub { font-size: 11.5px; color: #AEB49B; margin-bottom: 12px; line-height: 1.5; }
+  .guard {
+    position: relative; width: 84px; height: 108px; margin: 0 auto 10px;
+    background: #1B1D16; border: 1px solid #101208; border-radius: 6px;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,.55);
+  }
+  .guard .cover {
+    position: absolute; inset: -3px -3px 40%;
+    background: repeating-linear-gradient(45deg, #C8402E 0 9px, #E8E4D2 9px 18px);
+    border: 2px solid #781F13; border-radius: 6px 6px 2px 2px;
+    transform-origin: top center;
+    transform: perspective(300px) rotateX(48deg);
+    box-shadow: 0 6px 10px rgba(0,0,0,.45);
+  }
+  .guard .switch {
+    position: absolute; left: 50%; bottom: 14px; width: 16px; height: 44px; margin-left: -8px;
+    background: linear-gradient(180deg, #E8E4D2, #9A9684 60%, #6E6A5A);
+    border-radius: 8px; border: 1px solid #14160F;
+    box-shadow: 0 3px 6px rgba(0,0,0,.5);
+  }
+  .deck .btnrow { display: flex; gap: 8px; justify-content: center; }
+  .deck button {
+    font: 700 11px "Archivo", sans-serif; letter-spacing: 1.6px;
+    padding: 9px 16px; border-radius: 3px; cursor: pointer;
+    border: 1px solid #101208; box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 2px 4px rgba(0,0,0,.4);
+  }
+  .deck button.arm { background: linear-gradient(180deg, #FFC64B, #D99B23); color: #241B04; }
+  .deck button.safe { background: linear-gradient(180deg, #3A3E31, #2C2F25); color: #AEB49B; }
+  .deck .ticker {
+    grid-column: 1 / -1; margin-top: 2px;
+    font-family: "IBM Plex Mono", monospace; font-size: 11px; color: #8DA06B;
+    background: #12140D; border: 1px solid #0C0D0A; border-radius: 4px; padding: 8px 12px;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,.5);
+  }
+  .deck .ticker b { color: #7BE58A; font-weight: 400; }
+
+  /* ═══════════════════════════ 2 · THE LEDGER ═══════════════════════════ */
+  .ledger {
+    background: #F4EFE2;
+    color: #2B2620;
+    font-family: "Courier Prime", monospace;
+    border-radius: 4px;
+    padding: 26px 30px 24px 64px;
+    position: relative;
+    background-image:
+      repeating-linear-gradient(to bottom, transparent 0 27px, rgba(122,144,158,.28) 27px 28px);
+    box-shadow: 0 14px 40px rgba(0,0,0,.5);
+    border: 1px solid #C9BFA8;
+  }
+  .ledger::before { /* red margin rule */
+    content: ""; position: absolute; top: 0; bottom: 0; left: 46px; width: 1.5px;
+    background: rgba(196, 74, 58, .55);
+  }
+  .ledger .l-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 2.5px double #2B2620; padding-bottom: 8px; margin-bottom: 16px;
+  }
+  .ledger .l-head h3 { font-size: 17px; font-weight: 700; letter-spacing: .5px; }
+  .ledger .l-head .folio { font-size: 11px; color: #7A7264; }
+  .ledger table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ledger th {
+    text-align: left; font-size: 10px; letter-spacing: 1.6px; color: #7A7264;
+    border-bottom: 1px solid #2B2620; padding: 2px 8px 6px 0; font-weight: 700;
+  }
+  .ledger td { padding: 5px 8px 5px 0; vertical-align: baseline; }
+  .ledger .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .ledger .debit { color: #C44A3A; }
+  .ledger .entry-note { color: #7A7264; font-size: 11.5px; }
+  .stamp {
+    display: inline-block; font-weight: 700; font-size: 11px; letter-spacing: 1.5px;
+    border: 2.5px solid currentColor; border-radius: 3px; padding: 1px 8px;
+    transform: rotate(-2.5deg); opacity: .82;
+  }
+  .stamp.live { color: #2E6B45; }
+  .stamp.approved { color: #8A5A18; transform: rotate(1.8deg); }
+  .stamp.void { color: #C44A3A; transform: rotate(-4deg); }
+  .ledger .receipt {
+    margin-top: 18px; background: #FFFDF6; border: 1px solid #D8CFBA;
+    width: 330px; padding: 14px 16px 10px; font-size: 12px;
+    box-shadow: 2px 3px 0 rgba(43,38,32,.08);
+    position: relative;
+  }
+  .ledger .receipt::after { /* perforation */
+    content: ""; position: absolute; left: 0; right: 0; bottom: -6px; height: 6px;
+    background: radial-gradient(circle at 6px 0, transparent 3.2px, #F4EFE2 3.4px) repeat-x;
+    background-size: 13px 6px;
+  }
+  .ledger .receipt .r-line { display: flex; justify-content: space-between; padding: 1.5px 0; }
+  .ledger .receipt .r-rule { border-top: 1px dashed #B9AE95; margin: 7px 0; }
+  .ledger .receipt .r-total { font-weight: 700; }
+  .ledger .sig-row { display: flex; gap: 26px; align-items: flex-end; margin-top: 18px; }
+  .ledger .sig { flex: 0 0 250px; border-top: 1px solid #2B2620; font-size: 10px; letter-spacing: 1.6px; color: #7A7264; padding-top: 3px; }
+  .ledger .countersign {
+    font-family: "IBM Plex Sans", cursive; font-style: italic; font-size: 15px; color: #1E3A8A;
+    transform: rotate(-1.5deg); margin-bottom: -4px;
+  }
+  .ledger .l-actions { position: absolute; top: 24px; right: 28px; display: flex; gap: 8px; }
+  .ledger button {
+    font: 700 11px "Courier Prime", monospace; letter-spacing: 1.4px;
+    background: #2B2620; color: #F4EFE2; border: none; padding: 8px 14px; cursor: pointer;
+    box-shadow: 2.5px 2.5px 0 rgba(43,38,32,.28);
+  }
+  .ledger button.ghost { background: transparent; color: #2B2620; border: 1.5px solid #2B2620; box-shadow: none; }
+
+  /* ══════════════════════════ 3 · BLUEPRINT ═════════════════════════════ */
+  .blueprint {
+    background:
+      repeating-linear-gradient(to right, rgba(255,255,255,.045) 0 1px, transparent 1px 9px),
+      repeating-linear-gradient(to bottom, rgba(255,255,255,.045) 0 1px, transparent 1px 9px),
+      repeating-linear-gradient(to right, rgba(255,255,255,.08) 0 1px, transparent 1px 45px),
+      repeating-linear-gradient(to bottom, rgba(255,255,255,.08) 0 1px, transparent 1px 45px),
+      radial-gradient(1100px 500px at 30% 0%, #123B63, #0E2A47 70%);
+    color: #DCE9F5;
+    font-family: "Saira Semi Condensed", sans-serif;
+    border: 10px solid #0B2036;
+    outline: 1px solid rgba(220,233,245,.5);
+    outline-offset: -14px;
+    padding: 26px 28px 20px;
+    border-radius: 2px;
+    box-shadow: 0 14px 40px rgba(0,0,0,.5);
+    position: relative;
+  }
+  .bp-head {
+    display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px;
+  }
+  .bp-head h3 { font-size: 15px; font-weight: 600; letter-spacing: 3.5px; text-transform: uppercase; }
+  .bp-head .rev { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: #8FB4D6; letter-spacing: 1px; }
+  .bp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px 54px; margin-bottom: 6px; }
+  .bp-part { position: relative; border: 1.5px solid rgba(220,233,245,.85); border-radius: 3px; padding: 12px 14px; min-height: 96px; }
+  .bp-part.dashed { border-style: dashed; opacity: .8; }
+  .bp-part .p-name { font-size: 11px; letter-spacing: 2.5px; text-transform: uppercase; color: #8FB4D6; margin-bottom: 6px; }
+  .bp-part .p-val { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; line-height: 1.75; }
+  .bp-part .hatch {
+    position: absolute; inset: 0; border-radius: 2px;
+    background: repeating-linear-gradient(45deg, rgba(143,180,214,.16) 0 5px, transparent 5px 11px);
+    pointer-events: none;
+  }
+  /* dimension line connecting parts — drafting detail */
+  .dim {
+    position: absolute; left: calc(50% - 27px); top: 118px; width: 54px; height: 1px;
+    background: rgba(220,233,245,.75);
+  }
+  .dim::before, .dim::after {
+    content: ""; position: absolute; top: -3px; border: 3.5px solid transparent;
+  }
+  .dim::before { left: -2px; border-right-color: rgba(220,233,245,.85); }
+  .dim::after { right: -2px; border-left-color: rgba(220,233,245,.85); }
+  .dim .dim-label {
+    position: absolute; top: -17px; left: 50%; transform: translateX(-50%);
+    font-family: "IBM Plex Mono", monospace; font-size: 9.5px; color: #8FB4D6; letter-spacing: 1px; white-space: nowrap;
+  }
+  .bp-stamp {
+    position: absolute; right: 30px; top: 88px;
+    font-weight: 600; font-size: 13px; letter-spacing: 3px;
+    color: #6FE3C2; border: 2.5px solid #6FE3C2; border-radius: 3px;
+    padding: 3px 12px; transform: rotate(-7deg); opacity: .9;
+    text-shadow: 0 0 12px rgba(111,227,194,.35);
+  }
+  .titleblock {
+    margin-top: 22px; margin-left: auto; width: 460px;
+    border: 1.5px solid rgba(220,233,245,.85);
+    display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr;
+    font-size: 9px; letter-spacing: 1.4px; text-transform: uppercase;
+  }
+  .titleblock div { border: .5px solid rgba(220,233,245,.4); padding: 4px 8px 5px; }
+  .titleblock div b { display: block; font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: .5px; margin-top: 2px; color: #FFF; text-transform: none; }
+  .bp-actions { position: absolute; left: 28px; bottom: 24px; display: flex; gap: 10px; }
+  .blueprint button {
+    font: 600 11px "Saira Semi Condensed", sans-serif; letter-spacing: 2.5px; text-transform: uppercase;
+    background: transparent; color: #DCE9F5; border: 1.5px solid rgba(220,233,245,.85);
+    padding: 8px 16px; border-radius: 2px; cursor: pointer;
+  }
+  .blueprint button.go { background: #DCE9F5; color: #0E2A47; font-weight: 700; }
+
+  .verdict { color: #888; font-size: 12.5px; margin-top: -30px; margin-bottom: 40px; }
+</style>
+</head>
+<body>
+  <div class="intro">
+    <h1>Three original directions — each grown from something PlainOps actually does</h1>
+    <p>Not palettes. Each is a complete craft language with its own signature approval moment. Pick one and I expand it into the entire product — settings, panels, empty states, everything.</p>
+  </div>
+
+  <!-- ════════════════ 1 ════════════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 01 · FLIGHT DECK</h2><span>your tool literally has preflight_launch — so the product becomes an instrument panel. Signature: destructive actions live under a guarded switch cover.</span></div>
+    <div class="deck">
+      <div class="deck-grid">
+        <div class="plate"><span class="screw-b"></span>
+          <div class="tag">SYSTEMS · ACME-STORE</div>
+          <div class="sysrow"><b>GATEWAY</b><span class="lamp green">NOMINAL</span></div>
+          <div class="sysrow"><b>ORDERS SVC</b><span class="lamp green">NOMINAL</span></div>
+          <div class="sysrow"><b>POSTGRES 16</b><span class="lamp green">NOMINAL</span></div>
+          <div class="sysrow"><b>STAGING</b><span class="lamp amber">HOLD</span></div>
+          <div class="sysrow"><b>DR DRILL</b><span class="lamp off">STANDBY</span></div>
+        </div>
+        <div class="plate"><span class="screw-b"></span>
+          <div class="tag">BUDGET · BURN</div>
+          <div class="gauge-wrap">
+            <div class="gauge"><div class="needle"></div><div class="hub"></div></div>
+            <div class="gauge-read">SPEND <b>$38.20</b>/mo<br/>CEILING <b>$60.00</b><br/>MARGIN <b>36%</b></div>
+          </div>
+        </div>
+        <div class="plate guard-block"><span class="screw-b"></span>
+          <div class="guard-title">⚠ DEPLOY TO PRODUCTION</div>
+          <div class="guard-sub">acme-store · v2.4.1 · 31 resources<br/>lift guard to arm</div>
+          <div class="guard"><div class="switch"></div><div class="cover"></div></div>
+          <div class="btnrow">
+            <button class="arm">ARM</button>
+            <button class="safe">SAFE</button>
+          </div>
+        </div>
+        <div class="ticker">14:32:07 preflight · quota 140 vCPU ✓ · conn-pool math ✓ · alarms wired ✓ — <b>✓ https://acme-store… HTTP 200 · AS FLOWN</b></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ 2 ════════════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 02 · THE LEDGER</h2><span>your product's religion is receipts — verified-live checks, audit trails, honest costs. So the UI is a working ledger: entries, stamps, countersignatures. Signature: approving = countersigning the book.</span></div>
+    <div class="ledger">
+      <div class="l-actions"><button>POST ENTRY</button><button class="ghost">AUDIT</button></div>
+      <div class="l-head"><h3>PLAINOPS — DAY BOOK</h3><span class="folio">FOLIO 47 · JUL 20 2026 · ACCT acme-store</span></div>
+      <table>
+        <tr><th>TIME</th><th>ENTRY</th><th>STATE</th><th class="num" style="text-align:right">Δ / MO</th></tr>
+        <tr><td>14:07</td><td>Provision VPC, ALB, ECS, RDS-16 <span class="entry-note">— 31 resources</span></td><td><span class="stamp approved">APPROVED</span></td><td class="num debit">+ 31.40</td></tr>
+        <tr><td>14:26</td><td>Deploy v2.4.1 <span class="entry-note">— migrations: 2 additive, snapshot first</span></td><td><span class="stamp live">LIVE · HTTP 200</span></td><td class="num debit">+ 6.80</td></tr>
+        <tr><td>14:41</td><td>Bad release v2.4.2 <span class="entry-note">— failed sustained watch, check 20/42</span></td><td><span class="stamp void">REVERTED</span></td><td class="num">0.00</td></tr>
+      </table>
+      <div class="receipt">
+        <div class="r-line"><span>RECEIPT — DEPLOY №0047</span><span>14:26:11</span></div>
+        <div class="r-rule"></div>
+        <div class="r-line"><span>ECS Fargate 0.25 vCPU</span><span>9.20</span></div>
+        <div class="r-line"><span>RDS db.t4g.micro</span><span>13.10</span></div>
+        <div class="r-line"><span>ALB + traffic</span><span>16.30</span></div>
+        <div class="r-rule"></div>
+        <div class="r-line r-total"><span>MONTHLY</span><span>$38.60</span></div>
+        <div class="r-line"><span style="color:#2E6B45">✓ VERIFIED SERVING — HTTP 200</span></div>
+      </div>
+      <div class="sig-row">
+        <div style="flex:0 0 250px"><div class="countersign">Shobhit&nbsp;S.</div><div class="sig">COUNTERSIGNED — FOUNDER</div></div>
+        <div class="sig" style="flex:0 0 220px">POSTED BY — PLAINOPS ENGINE</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ 3 ════════════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 03 · BLUEPRINT</h2><span>PlainOps deploys reviewed blueprints — the AI never freehands infrastructure. So the product IS the drawing: cyanotype sheet, dimension lines, title block. Signature: going live stamps the sheet AS BUILT.</span></div>
+    <div class="blueprint">
+      <div class="bp-head">
+        <h3>Sheet 04 — acme-store · production</h3>
+        <span class="rev">SCALE 1:1 · REV C · DO NOT SCALE CLOUD</span>
+      </div>
+      <div class="bp-grid">
+        <div class="bp-part">
+          <div class="p-name">Load Balancer</div>
+          <div class="p-val">alb: po-acme-store<br/>:80 → tg healthy 2/2</div>
+          <div class="dim"><span class="dim-label">CLOUD MAP DNS</span></div>
+        </div>
+        <div class="bp-part">
+          <div class="p-name">ECS Service ×2</div>
+          <div class="p-val">fargate 0.25 vCPU / 512
+<br/>autoscale 1 → 4</div>
+        </div>
+        <div class="bp-part">
+          <div class="p-name">RDS Postgres 16</div>
+          <div class="p-val">db.t4g.micro · 20 GiB<br/>PITR 7d · encrypted</div>
+        </div>
+        <div class="bp-part dashed">
+          <div class="p-name">Staging Twin — proposed</div>
+          <div class="p-val">awaiting countersign<br/>est + $31 / mo</div>
+          <div class="hatch"></div>
+        </div>
+      </div>
+      <div class="bp-stamp">AS BUILT · HTTP 200</div>
+      <div class="titleblock">
+        <div>PROJECT<b>acme-store</b></div>
+        <div>DRAWN BY<b>plainops</b></div>
+        <div>CHECKED<b>founder</b></div>
+        <div>REV<b>C · v2.4.1</b></div>
+      </div>
+      <div class="bp-actions" style="position:static; margin-top:16px">
+        <button class="go">Approve revision</button>
+        <button>Request changes</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="verdict">Every element above is hand-drawn CSS — bezels, screws, guard cover, ledger rules, perforation, hatching, dimension arrows, title block. No gradients-on-navy anywhere.</div>
+</body>
+</html>

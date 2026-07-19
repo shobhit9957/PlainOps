@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PlainOps — Runbook Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Archivo:wght@600;700;800&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #131519; --panel: #191C21; --panel2: #15181D; --line: #262A31; --line2: #1D2026;
+  --text: #E9ECF1; --muted: #8A93A0; --dim: #5C6470;
+  --ok: #46D39A; --ok-deep: #1E4634;
+  --amber: #E8B33B; --amber-deep: #4A3A14;
+  --red: #E0503C; --red-deep: #55231C;
+  --mono: "IBM Plex Mono", monospace; --sans: "IBM Plex Sans", sans-serif; --disp: "Archivo", sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 13px; line-height: 1.5; min-height: 100vh; }
+.mono { font-family: var(--mono); }
+
+/* ───────── header ───────── */
+header { display: flex; align-items: center; gap: 18px; padding: 0 20px; height: 52px; border-bottom: 1px solid var(--line); background: var(--panel2); position: sticky; top: 0; z-index: 20; }
+.brand { font: 700 15px var(--disp); letter-spacing: .5px; }
+.brand .mark { color: var(--amber); font-family: var(--mono); margin-right: 3px; }
+.brand .sub { font: 600 9px var(--disp); letter-spacing: 2.5px; color: var(--dim); display: block; margin-top: -3px; }
+nav.views { display: flex; gap: 2px; margin-left: 16px; height: 100%; }
+nav.views button { font: 600 12px var(--sans); letter-spacing: .3px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted); padding: 0 14px; cursor: pointer; height: 100%; }
+nav.views button:hover { color: var(--text); }
+nav.views button.on { color: var(--amber); border-bottom-color: var(--amber); }
+.h-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.proj-chip { font: 500 11.5px var(--mono); border: 1px solid var(--line); border-radius: 6px; padding: 5px 11px; color: var(--text); background: var(--panel); }
+.proj-chip .st { color: var(--ok); }
+.founder { font: 600 10px var(--mono); letter-spacing: 1px; color: var(--muted); border: 1px dashed var(--line); border-radius: 999px; padding: 4px 11px; }
+
+/* ───────── shared atoms ───────── */
+.rbid { display: inline-block; font: 600 10px var(--mono); letter-spacing: 1px; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; color: var(--muted); background: var(--panel2); }
+.stamp { display: inline-block; font: 700 9.5px var(--mono); letter-spacing: 1.4px; border: 1.5px solid var(--ok); color: var(--ok); border-radius: 3px; padding: 1px 8px; transform: rotate(-1.5deg); }
+.stamp.un { border-color: var(--amber); color: var(--amber); }
+.stamp.void { border-color: var(--red); color: var(--red); }
+.who { font: 500 9.5px var(--mono); letter-spacing: 1px; color: var(--dim); }
+.who.f { color: var(--amber); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.card .c-h { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line2); }
+.card .c-h h3 { font: 600 12.5px var(--sans); }
+.card .c-h .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+main { max-width: 1180px; margin: 0 auto; padding: 18px 20px 60px; }
+.view { display: none; }
+.view.on { display: block; }
+.cols { display: flex; gap: 16px; align-items: flex-start; }
+.col-main { flex: 1.75; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.col-side { flex: 1; display: flex; flex-direction: column; gap: 16px; }
+
+/* ───────── operate: active runbook ───────── */
+.precond { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid var(--line2); background: var(--panel2); }
+.pc { font: 500 10.5px var(--mono); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+.pc::before { content: "✓ "; color: var(--ok); }
+.steps { padding: 4px 16px 10px; }
+.step { display: flex; gap: 13px; padding: 10px 0; border-top: 1px solid var(--line2); }
+.step:first-child { border-top: none; }
+.st-n { flex: 0 0 26px; font: 500 11px var(--mono); color: var(--dim); padding-top: 2px; }
+.st-box { flex: 0 0 18px; height: 18px; border-radius: 4px; border: 1.5px solid #3A404A; position: relative; top: 2px; }
+.step.done .st-box { background: var(--ok-deep); border-color: var(--ok); }
+.step.done .st-box::after { content: "✓"; position: absolute; inset: 0; color: var(--ok); font-size: 12px; line-height: 16px; text-align: center; }
+.step.run .st-box { border-color: var(--amber); }
+.step.run .st-box::after { content: ""; position: absolute; inset: 3px; border-radius: 2px; background: var(--amber); animation: pl 1.2s ease-in-out infinite; }
+@keyframes pl { 50% { opacity: .25; } }
+.st-body { flex: 1; min-width: 0; }
+.st-t { color: #C9CED6; }
+.st-t b { color: var(--text); font-weight: 600; }
+.st-chk { font: 500 10.5px var(--mono); color: var(--ok); }
+.st-watch { font: 500 10.5px var(--mono); color: var(--amber); }
+.st-who { flex-shrink: 0; padding-top: 2px; }
+details.evidence { margin-top: 6px; }
+details.evidence summary { cursor: pointer; font: 500 10px var(--mono); color: #8FA6C8; letter-spacing: .5px; list-style: none; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #263042; background: #14181F; border-radius: 4px; padding: 2px 9px; }
+details.evidence summary::before { content: "▸"; transition: transform .15s; }
+details.evidence[open] summary::before { transform: rotate(90deg); }
+details.evidence pre { margin-top: 7px; background: #0D1014; border: 1px solid var(--line2); border-radius: 5px; padding: 9px 12px; font: 400 10.5px var(--mono); color: #93A0B0; overflow-x: auto; line-height: 1.7; }
+details.evidence pre .g { color: var(--ok); } details.evidence pre .a { color: var(--amber); } details.evidence pre .r { color: var(--red); }
+.signoff { margin: 8px 16px 14px; padding: 11px 14px; background: #191410; border: 1px solid var(--amber-deep); border-radius: 6px; display: flex; align-items: center; gap: 12px; font-size: 12px; color: #D9C9A3; }
+.signoff .box { flex: 0 0 18px; height: 18px; border: 1.5px dashed var(--amber); border-radius: 4px; position: relative; }
+.signoff.signed .box { border-style: solid; background: var(--amber-deep); }
+.signoff.signed .box::after { content: "✓"; position: absolute; inset: 0; color: var(--amber); font-size: 12px; line-height: 16px; text-align: center; }
+.signoff .sig-name { font: 600 13px var(--mono); color: var(--amber); }
+.rb-foot { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line2); background: var(--panel2); border-radius: 0 0 8px 8px; }
+.rb-foot .elapsed { font: 600 12px var(--mono); color: var(--amber); }
+.rb-foot .spacer { flex: 1; }
+button.ctl { font: 700 10.5px var(--disp); letter-spacing: 1.5px; padding: 8px 15px; border-radius: 5px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--muted); }
+button.ctl:hover { color: var(--text); }
+button.ctl.hold { border-color: var(--amber-deep); color: var(--amber); }
+button.ctl.abort { border-color: var(--red-deep); color: var(--red); }
+button.ctl.go { background: var(--ok); border-color: var(--ok); color: #04170F; }
+.queue-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--line2); font-size: 12px; }
+.queue-row:first-of-type { border-top: none; }
+.queue-row .q-t { color: #C9CED6; }
+.queue-row .q-meta { margin-left: auto; font: 500 10px var(--mono); color: var(--dim); }
+
+/* ───────── operate: side rail ───────── */
+.svc-rows { padding: 6px 16px 12px; }
+.svc-row { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--line2); font-size: 12px; }
+.svc-row:first-child { border-top: none; }
+.svc-row .k { color: var(--muted); }
+.svc-row .v { font: 500 11.5px var(--mono); }
+.svc-row .v.ok { color: var(--ok); } .svc-row .v.warn { color: var(--amber); }
+.probe-strip { display: flex; gap: 3px; padding: 12px 16px 4px; }
+.probe { flex: 1; height: 18px; border-radius: 2px; background: #1E2126; border: 1px solid var(--line2); }
+.probe.hit { background: var(--ok-deep); border-color: var(--ok); }
+.probe-cap { padding: 6px 16px 12px; font: 500 10px var(--mono); color: var(--dim); }
+.pol { padding: 8px 16px 12px; }
+.pol-row { display: flex; gap: 8px; align-items: baseline; padding: 5px 0; font-size: 11.5px; color: var(--muted); }
+.pol-row b { font: 500 11px var(--mono); color: var(--text); }
+.pol-row .ok { color: var(--ok); } .pol-row .amber { color: var(--amber); }
+
+/* ───────── library ───────── */
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+.rb-card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+.rb-card .r1 { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+.rb-card h4 { font: 600 13px var(--sans); }
+.rb-card .desc { color: var(--muted); font-size: 11.5px; line-height: 1.55; margin-bottom: 10px; }
+.rb-card .meta { display: flex; gap: 14px; font: 500 10px var(--mono); color: var(--dim); flex-wrap: wrap; }
+.rb-card .meta b { color: var(--muted); font-weight: 500; }
+.rb-card .r1 .run { margin-left: auto; font: 700 9.5px var(--disp); letter-spacing: 1.2px; background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 4px; padding: 5px 11px; cursor: pointer; }
+.rb-card .r1 .run:hover { border-color: var(--amber); color: var(--amber); }
+.lib-note { margin-top: 14px; font: 500 10.5px var(--mono); color: var(--dim); }
+
+/* ───────── estate ───────── */
+.est-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 14px; }
+.hist { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.hist .h-stamp { font: 600 8.5px var(--mono); letter-spacing: .8px; border: 1px solid var(--line); color: var(--dim); border-radius: 3px; padding: 2px 6px; }
+.hist .h-stamp.v { border-color: #2E7D5B; color: var(--ok); }
+.hist .h-stamp.r { border-color: var(--red-deep); color: var(--red); }
+.est-kv { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); padding: 4px 0; border-top: 1px solid var(--line2); }
+.est-kv:first-of-type { border-top: none; }
+.est-kv b { font: 500 11px var(--mono); color: var(--text); }
+
+/* ───────── journal ───────── */
+table.jr { width: 100%; border-collapse: collapse; font-size: 12px; }
+.jr th { text-align: left; font: 600 9.5px var(--mono); letter-spacing: 1.4px; color: var(--dim); padding: 9px 12px; border-bottom: 1px solid var(--line); }
+.jr td { padding: 8px 12px; border-bottom: 1px solid var(--line2); color: #C2C8D1; }
+.jr td.mono, .jr .mono { font: 500 11px var(--mono); }
+.jr tr:hover td { background: #1B1F25; }
+.jr .out-v { color: var(--ok); font: 600 10.5px var(--mono); letter-spacing: .5px; }
+.jr .out-r { color: var(--red); font: 600 10.5px var(--mono); letter-spacing: .5px; }
+.jr .out-c { color: var(--muted); font: 600 10.5px var(--mono); letter-spacing: .5px; }
+.jr-foot { padding: 10px 12px; font: 500 10px var(--mono); color: var(--dim); }
+
+/* ───────── settings ───────── */
+.set-wrap { display: flex; gap: 18px; align-items: flex-start; }
+.set-nav { flex: 0 0 190px; position: sticky; top: 70px; }
+.set-nav a { display: block; padding: 7px 13px; font-size: 12.5px; color: var(--muted); border-left: 2px solid var(--line); cursor: pointer; text-decoration: none; }
+.set-nav a.on { color: var(--amber); border-left-color: var(--amber); background: #1B1810; }
+.set-main { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+details.sec { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+details.sec > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 13px 16px; }
+details.sec > summary::-webkit-details-marker { display: none; }
+details.sec > summary .chev { color: var(--dim); font-size: 11px; transition: transform .15s; }
+details.sec[open] > summary .chev { transform: rotate(90deg); }
+details.sec > summary h3 { font: 600 13px var(--sans); }
+details.sec > summary .hint { margin-left: auto; font: 500 10px var(--mono); color: var(--dim); }
+.sec-body { border-top: 1px solid var(--line2); padding: 4px 16px 14px; }
+.set-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line2); }
+.set-row:first-child { border-top: none; }
+.set-row .s-k { flex: 0 0 210px; }
+.set-row .s-k .t { font-size: 12.5px; }
+.set-row .s-k .d { font-size: 10.5px; color: var(--dim); margin-top: 1px; }
+.set-row .s-v { font: 500 11.5px var(--mono); color: var(--text); }
+.set-row .s-v.ok { color: var(--ok); } .set-row .s-v.warn { color: var(--amber); } .set-row .s-v.bad { color: var(--red); }
+.set-row .amend { margin-left: auto; font: 600 9.5px var(--disp); letter-spacing: 1px; border: 1px solid var(--line); background: none; color: var(--muted); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+.set-row .amend:hover { border-color: var(--amber); color: var(--amber); }
+.pol-note { font: 500 10px var(--mono); color: var(--dim); padding: 8px 0 2px; }
+details.sec.danger { border-color: var(--red-deep); }
+details.sec.danger > summary h3 { color: var(--red); }
+.danger-row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid #2A1613; }
+.danger-row .t { font-size: 12.5px; }
+.danger-row .d { font-size: 10.5px; color: var(--dim); }
+.danger-row button { margin-left: auto; font: 700 10px var(--disp); letter-spacing: 1.2px; border: 1px solid var(--red-deep); background: #170F0E; color: var(--red); border-radius: 5px; padding: 7px 13px; cursor: pointer; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="mark">&gt;_</span>PlainOps<span class="sub">RUNBOOK CONSOLE</span></div>
+  <nav class="views" id="views">
+    <button data-v="operate" class="on">Operate</button>
+    <button data-v="library">Runbook Library</button>
+    <button data-v="estate">Estate</button>
+    <button data-v="journal">Journal</button>
+    <button data-v="settings">Settings</button>
+  </nav>
+  <div class="h-right">
+    <span class="proj-chip mono">acme-store · <span class="st">● LIVE</span></span>
+    <span class="founder">FOUNDER ON CONSOLE</span>
+  </div>
+</header>
+
+<main>
+  <!-- ═══════════════ OPERATE ═══════════════ -->
+  <section class="view on" id="v-operate">
+    <div class="cols">
+      <div class="col-main">
+        <div class="card">
+          <div class="c-h">
+            <span class="rbid">RB-02 · REV 6</span>
+            <h3>Safe production release — acme-store v2.4.3</h3>
+            <div class="right"><span class="stamp">PROVEN LIVE 07-19</span><span class="who f">SIGN-OFF: FOUNDER</span></div>
+          </div>
+          <div class="precond">
+            <span class="pc">repo attached</span><span class="pc">previous build v…6258 retained</span><span class="pc">snapshot capability</span><span class="pc">error budget 62% &gt; 20% gate</span><span class="pc">staging proof a2ee2b5</span>
+          </div>
+          <div class="steps">
+            <div class="step done"><span class="st-n">1.</span><span class="st-box"></span>
+              <div class="st-body"><div class="st-t"><b>Snapshot database</b> — restore point before anything touches schema <span class="st-chk">✓ po-acme-store-…-0720 confirmed</span></div>
+                <details class="evidence"><summary>evidence · rds snapshot</summary><pre><span class="g">✓</span> create-db-snapshot po-acme-store-plainops-2026-07-20T16-58
+status: creating → <span class="g">available</span> · engine pg16 · 20 GiB</pre></details>
+              </div><span class="st-who who">ENGINE</span></div>
+            <div class="step done"><span class="st-n">2.</span><span class="st-box"></span>
+              <div class="st-body"><div class="st-t"><b>Lint pending migrations</b> — destructive statements must be disclosed, never hidden <span class="st-chk">✓ 2 files · 1 destructive, disclosed</span></div>
+                <details class="evidence"><summary>evidence · lint report</summary><pre>1700000000001_expand-audit-log.js      <span class="g">additive ✓</span>
+1700000000002_contract-legacy-flag.js  <span class="a">⚠ DROP COLUMN — expand/contract step 3</span>
+policy: destructive allowed WITH snapshot + disclosure</pre></details>
+              </div><span class="st-who who">ENGINE</span></div>
+            <div class="step done"><span class="st-n">3.</span><span class="st-box"></span>
+              <div class="st-body"><div class="st-t"><b>Founder sign-off</b> — cost delta +$0.00 · risks disclosed on the card</div></div>
+              <span class="st-who who f">FOUNDER</span></div>
+            <div class="step done"><span class="st-n">4.</span><span class="st-box"></span>
+              <div class="st-body"><div class="st-t"><b>Run migrations as one-off task</b> — service's own image &amp; network, PGSSLMODE injected <span class="st-chk">✓ exit 0 · 2 applied</span></div>
+                <details class="evidence"><summary>evidence · task log tail</summary><pre>### MIGRATION 1700000000001_expand-audit-log (UP)
+CREATE TABLE "audit_log" (…) <span class="g">✓</span>
+### MIGRATION 1700000000002_contract-legacy-flag (UP)
+ALTER TABLE tasks DROP COLUMN IF EXISTS legacy_flag <span class="g">✓</span>
+Migrations complete!</pre></details>
+              </div><span class="st-who who">ENGINE</span></div>
+            <div class="step run" id="step-watch"><span class="st-n">5.</span><span class="st-box"></span>
+              <div class="st-body"><div class="st-t"><b>Deploy + sustained watch</b> — <span class="st-watch" id="probe-txt">probe 7/12 · 10s cadence · 2-strike revert armed</span></div>
+                <div class="probe-strip" id="probe-strip"></div>
+              </div><span class="st-who who">ENGINE</span></div>
+            <div class="step" id="step-declare"><span class="st-n">6.</span><span class="st-box"></span>
+              <div class="st-body"><div class="st-t"><b>Declare verified</b> — only on 12/12; any 2 consecutive failures revert to v…6258 automatically</div></div>
+              <span class="st-who who">ENGINE</span></div>
+          </div>
+          <div class="signoff signed">
+            <span class="box"></span>
+            <span>Step 3 executed — procedure counter-signed <span class="sig-name">founder</span> · 16:58:41 · scope: THIS run only, never standing</span>
+          </div>
+          <div class="rb-foot">
+            <span class="elapsed mono" id="elapsed">T+02:41</span>
+            <span class="mono" style="color:var(--dim); font-size:10.5px">journal will record every step · evidence retained</span>
+            <span class="spacer"></span>
+            <button class="ctl hold">HOLD</button>
+            <button class="ctl abort">ABORT &amp; REVERT</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="c-h"><h3>Queued procedures</h3><div class="right"><span class="mono" style="font-size:10px;color:var(--dim)">run in order · one mutating runbook at a time</span></div></div>
+          <div class="queue-row"><span class="rbid">RB-07</span><span class="q-t">Rotate APP_TOKEN (secure re-entry → bounce → verify)</span><span class="q-meta">awaiting slot · needs sign-off</span></div>
+          <div class="queue-row"><span class="rbid">RB-05</span><span class="q-t">Weekly DR drill — restore latest snapshot to temp instance</span><span class="q-meta">scheduled SUN 03:00</span></div>
+        </div>
+      </div>
+
+      <div class="col-side">
+        <div class="card">
+          <div class="c-h"><h3>Service record — acme-store</h3><div class="right"><span class="stamp">LIVE · 200</span></div></div>
+          <div class="svc-rows">
+            <div class="svc-row"><span class="k">Shape</span><span class="v">container + rds-16 · ap-south-1</span></div>
+            <div class="svc-row"><span class="k">Running / desired</span><span class="v ok">2 / 2 · rollout COMPLETED</span></div>
+            <div class="svc-row"><span class="k">Last verified</span><span class="v ok">16:55:07 · HTTP 200 ×12</span></div>
+            <div class="svc-row"><span class="k">DB connections</span><span class="v warn">76 / 81 — watch</span></div>
+            <div class="svc-row"><span class="k">Cost (est / actual 14d)</span><span class="v">$38.20 / $17.11</span></div>
+            <div class="svc-row"><span class="k">Error budget 30d</span><span class="v ok">62% · deploys allowed</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="c-h"><h3>Last incident — INC-0047</h3><div class="right"><span class="stamp">RESOLVED</span></div></div>
+          <div class="svc-rows">
+            <div class="svc-row"><span class="k">Cause</span><span class="v">desired=0 · out-of-band</span></div>
+            <div class="svc-row"><span class="k">Detect → fix</span><span class="v ok">MTTR 73s · evidence ×3</span></div>
+            <div class="svc-row"><span class="k">Postmortem</span><span class="v">RB-11 drafted · blameless</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="c-h"><h3>Standing policies</h3><div class="right"><span class="who f">AMEND = SIGN-OFF</span></div></div>
+          <div class="pol">
+            <div class="pol-row"><b class="ok">✓</b> every mutating runbook requires a fresh signature</div>
+            <div class="pol-row"><b class="ok">✓</b> sustained watch <b>120s</b> min · 2-strike auto-revert</div>
+            <div class="pol-row"><b class="ok">✓</b> snapshot before ANY schema change</div>
+            <div class="pol-row"><b class="amber">◈</b> deploys blocked if error budget &lt; <b>20%</b></div>
+            <div class="pol-row"><b class="ok">✓</b> secrets: values never shown to the engine's model</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ LIBRARY ═══════════════ -->
+  <section class="view" id="v-library">
+    <div class="lib-grid">
+      <div class="rb-card"><div class="r1"><span class="rbid">RB-01</span><h4>First deploy (container + DB)</h4><button class="run">RUN ▸</button></div>
+        <div class="desc">Propose blueprint with cost → provision VPC/ALB/ECS/RDS → build in-cloud → verify HTTP 200. Never reports live without one.</div>
+        <div class="meta"><span>rev <b>9</b></span><span>steps <b>7</b></span><span>avg <b>19m</b></span><span class="stamp">PROVEN 07-19</span></div></div>
+      <div class="rb-card"><div class="r1"><span class="rbid">RB-02</span><h4>Safe production release</h4><button class="run">RUN ▸</button></div>
+        <div class="desc">Snapshot → lint migrations → one-off migration task → deploy → sustained watch → auto-revert on 2 strikes.</div>
+        <div class="meta"><span>rev <b>6</b></span><span>steps <b>6</b></span><span>avg <b>9m</b></span><span class="stamp">PROVEN 07-19 · incl. LIVE REVERT</span></div></div>
+      <div class="rb-card"><div class="r1"><span class="rbid">RB-03</span><h4>Promote staging → production</h4><button class="run">RUN ▸</button></div>
+        <div class="desc">Verifies staging serves, pins the staging-tested commit, refuses newer commits without explicit acceptance.</div>
+        <div class="meta"><span>rev <b>4</b></span><span>steps <b>5</b></span><span>avg <b>7m</b></span><span class="stamp">PROVEN 07-19 · both paths</span></div></div>
+      <div class="rb-card"><div class="r1"><span class="rbid">RB-04</span><h4>Rollback to previous build</h4><button class="run">RUN ▸</button></div>
+        <div class="desc">Repoints the service at the previous immutable v-tag, waits stable, verifies content actually changed back.</div>
+        <div class="meta"><span>rev <b>5</b></span><span>steps <b>4</b></span><span>avg <b>4m</b></span><span class="stamp">PROVEN 07-19 · content proof</span></div></div>
+      <div class="rb-card"><div class="r1"><span class="rbid">RB-05</span><h4>Disaster-recovery drill</h4><button class="run">RUN ▸</button></div>
+        <div class="desc">Restores the latest snapshot into a TEMPORARY instance, verifies it comes up, deletes it. Proves backups restore.</div>
+        <div class="meta"><span>rev <b>3</b></span><span>steps <b>5</b></span><span>avg <b>18m</b></span><span class="stamp">PROVEN 07-19 · PASSED</span></div></div>
+      <div class="rb-card"><div class="r1"><span class="rbid">RB-06</span><h4>Diagnose (any infra, read-only)</h4><button class="run">RUN ▸</button></div>
+        <div class="desc">Evidence first: probe, per-service state, logs, audit, estate sweep — across AWS, GCP and Azure. Never guesses.</div>
+        <div class="meta"><span>rev <b>8</b></span><span>steps <b>6</b></span><span>avg <b>90s</b></span><span class="stamp">PROVEN 07-19 · 2 chaos drills</span></div></div>
+      <div class="rb-card"><div class="r1"><span class="rbid">RB-08</span><h4>Deploy microservices (GCP)</h4><button class="run">RUN ▸</button></div>
+        <div class="desc">Gateway + IAM-gated internals on Cloud Run, ID-token fan-out, deterministic URLs, deletion protection off.</div>
+        <div class="meta"><span>rev <b>5</b></span><span>steps <b>8</b></span><span>avg <b>11m</b></span><span class="stamp">PROVEN 07-19 · fan-out 200</span></div></div>
+      <div class="rb-card"><div class="r1"><span class="rbid">RB-22</span><h4>Deploy app (Azure)</h4><button class="run">RUN ▸</button></div>
+        <div class="desc">Container Apps + ACR build + optional Postgres flexible server. Providers auto-registered on fresh subscriptions.</div>
+        <div class="meta"><span>rev <b>3</b></span><span>steps <b>7</b></span><span>est <b>~14m</b></span><span class="stamp un">NOT YET PROVEN LIVE — honest: no subscription · 15/15 commands pre-verified</span></div></div>
+      <div class="rb-card"><div class="r1"><span class="rbid">RB-99</span><h4>Teardown &amp; verify clean</h4><button class="run">RUN ▸</button></div>
+        <div class="desc">Destroys the stack, sweeps snapshots/alarms/schedules both regions, then PROVES zero residue category by category.</div>
+        <div class="meta"><span>rev <b>7</b></span><span>steps <b>9</b></span><span>avg <b>16m</b></span><span class="stamp">PROVEN 07-19 · 16/16 CLEAN</span></div></div>
+    </div>
+    <div class="lib-note">42 runbooks total · every PROVEN stamp carries the date of a real cloud execution — stamps are earned, never asserted.</div>
+  </section>
+
+  <!-- ═══════════════ ESTATE ═══════════════ -->
+  <section class="view" id="v-estate">
+    <div class="est-grid">
+      <div class="rb-card">
+        <div class="r1"><h4>acme-store</h4><span class="rbid">AWS · ap-south-1</span><span class="stamp" style="margin-left:auto">LIVE · 200</span></div>
+        <div class="est-kv"><span>Shape</span><b>container + rds-16</b></div>
+        <div class="est-kv"><span>Uptime 90d</span><b>99.98%</b></div>
+        <div class="est-kv"><span>Est / mo</span><b>$38.20</b></div>
+        <div class="hist"><span class="h-stamp v">RB-01 ✓ 07-19</span><span class="h-stamp v">RB-02 ✓ ×3</span><span class="h-stamp r">RB-02 REVERTED 14:41</span><span class="h-stamp v">RB-03 ✓ ×2</span><span class="h-stamp v">RB-05 ✓</span><span class="h-stamp v">INC-0047 · 73s</span></div>
+      </div>
+      <div class="rb-card">
+        <div class="r1"><h4>acme-api</h4><span class="rbid">GCP · asia-south1</span><span class="stamp" style="margin-left:auto">LIVE · 200</span></div>
+        <div class="est-kv"><span>Shape</span><b>microservices ×3 · IAM-gated</b></div>
+        <div class="est-kv"><span>Fan-out</span><b>gateway → 2 internal · ID tokens</b></div>
+        <div class="est-kv"><span>Est / mo</span><b>$4.10 (scale-to-zero)</b></div>
+        <div class="hist"><span class="h-stamp v">RB-08 ✓ 07-19</span><span class="h-stamp v">RB-06 ✓ chaos found svc02</span><span class="h-stamp v">HEALED · tofu</span></div>
+      </div>
+      <div class="rb-card">
+        <div class="r1"><h4>acme-store-stg</h4><span class="rbid">AWS · staging twin</span><span class="stamp" style="margin-left:auto">LIVE</span></div>
+        <div class="est-kv"><span>Purpose</span><b>promotion gate · isolated stack</b></div>
+        <div class="est-kv"><span>Pinned commit</span><b>a2ee2b5 · verified</b></div>
+        <div class="est-kv"><span>Est / mo</span><b>$31.40 · destroy any time</b></div>
+        <div class="hist"><span class="h-stamp v">RB-01 ✓</span><span class="h-stamp v">RB-03 source ×2</span></div>
+      </div>
+      <div class="rb-card" style="border-style:dashed">
+        <div class="r1"><h4>Azure</h4><span class="rbid">NOT CONNECTED</span><span class="stamp un" style="margin-left:auto">UNCHARTED</span></div>
+        <div class="est-kv"><span>Status</span><b>az CLI ready · no subscription</b></div>
+        <div class="est-kv"><span>Honesty</span><b>runbooks pre-verified, unproven</b></div>
+        <div class="est-kv"><span>First deploy</span><b>will be supervised + stamped</b></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ JOURNAL ═══════════════ -->
+  <section class="view" id="v-journal">
+    <div class="card">
+      <div class="c-h"><h3>Journal — append-only, scrubbed, every entry carries its evidence</h3><div class="right"><span class="mono" style="font-size:10px;color:var(--dim)">filter: today · acme-store</span></div></div>
+      <table class="jr">
+        <tr><th>TIME</th><th>RUNBOOK</th><th>PROJECT</th><th>EXECUTED BY</th><th>SIGN-OFF</th><th>OUTCOME</th><th>EVIDENCE</th></tr>
+        <tr><td class="mono">16:58</td><td><span class="rbid">RB-02</span> safe release v2.4.3</td><td>acme-store</td><td class="mono">engine</td><td class="mono" style="color:var(--amber)">founder ✓ 16:58:41</td><td><span class="out-v">RUNNING · step 5/6</span></td><td class="mono">4 items</td></tr>
+        <tr><td class="mono">16:04</td><td><span class="rbid">RB-06</span> diagnose 503</td><td>acme-store</td><td class="mono">engine</td><td class="mono" style="color:var(--dim)">read-only · none</td><td><span class="out-v">ROOT CAUSE PINNED</span></td><td class="mono">3 items</td></tr>
+        <tr><td class="mono">16:04</td><td><span class="rbid">RB-12</span> restore desired=1</td><td>acme-store</td><td class="mono">engine</td><td class="mono" style="color:var(--amber)">founder ✓ 16:04:12</td><td><span class="out-v">VERIFIED · 200 ×12</span></td><td class="mono">2 items</td></tr>
+        <tr><td class="mono">14:47</td><td><span class="rbid">RB-04</span> auto-revert v2.4.2</td><td>acme-store</td><td class="mono">engine · policy</td><td class="mono" style="color:var(--dim)">pre-authorized by RB-02 signature</td><td><span class="out-v">REVERTED · prev tag serving</span></td><td class="mono">3 items</td></tr>
+        <tr><td class="mono">14:41</td><td><span class="rbid">RB-02</span> safe release v2.4.2</td><td>acme-store</td><td class="mono">engine</td><td class="mono" style="color:var(--amber)">founder ✓ 14:37:03</td><td><span class="out-r">FAILED WATCH · check 20/42</span></td><td class="mono">5 items</td></tr>
+        <tr><td class="mono">14:26</td><td><span class="rbid">RB-02</span> safe release v2.4.1</td><td>acme-store</td><td class="mono">engine</td><td class="mono" style="color:var(--amber)">founder ✓ 14:22:19</td><td><span class="out-v">VERIFIED · migrations ×2</span></td><td class="mono">6 items</td></tr>
+        <tr><td class="mono">13:58</td><td><span class="rbid">RB-03</span> promote a2ee2b5</td><td>acme-store</td><td class="mono">engine</td><td class="mono" style="color:var(--amber)">founder ✓ (drift accepted)</td><td><span class="out-v">PROMOTED · VERIFIED</span></td><td class="mono">2 items</td></tr>
+        <tr><td class="mono">13:07</td><td><span class="rbid">RB-01</span> first deploy</td><td>acme-store</td><td class="mono">engine</td><td class="mono" style="color:var(--amber)">founder ✓ · cost card $38.20</td><td><span class="out-v">LIVE · 31 resources</span></td><td class="mono">7 items</td></tr>
+        <tr><td class="mono">03:00</td><td><span class="rbid">RB-05</span> DR drill (weekly)</td><td>acme-store</td><td class="mono">engine · schedule</td><td class="mono" style="color:var(--amber)">standing order №12 · founder</td><td><span class="out-c">PASSED · temp deleted</span></td><td class="mono">4 items</td></tr>
+      </table>
+      <div class="jr-foot">append-only · secrets scrubbed before write · this table IS ~/.plainops/audit.log, not a rendering of good intentions</div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ SETTINGS ═══════════════ -->
+  <section class="view" id="v-settings">
+    <div class="set-wrap">
+      <div class="set-nav" id="set-nav">
+        <a class="on" data-t="s-engine">Engine &amp; model</a>
+        <a data-t="s-clouds">Cloud connections</a>
+        <a data-t="s-pol">Execution policies</a>
+        <a data-t="s-conn">Connectors</a>
+        <a data-t="s-danger">Danger zone</a>
+      </div>
+      <div class="set-main">
+        <details class="sec" id="s-engine" open>
+          <summary><span class="chev">▸</span><h3>Engine &amp; model</h3><span class="hint">local-first · your key</span></summary>
+          <div class="sec-body">
+            <div class="set-row"><div class="s-k"><div class="t">Anthropic API key</div><div class="d">stored locally, never leaves this machine</div></div><span class="s-v ok">configured · sk-ant-…4f2</span><button class="amend">REPLACE</button></div>
+            <div class="set-row"><div class="s-k"><div class="t">Model</div><div class="d">reasoning engine for runbook narration</div></div><span class="s-v">claude-opus-4-8</span><button class="amend">AMEND</button></div>
+            <div class="set-row"><div class="s-k"><div class="t">Home directory</div><div class="d">state, vault, journal</div></div><span class="s-v">~/.plainops</span></div>
+          </div>
+        </details>
+        <details class="sec" id="s-clouds">
+          <summary><span class="chev">▸</span><h3>Cloud connections</h3><span class="hint">2 GO · 1 NOT CONNECTED</span></summary>
+          <div class="sec-body">
+            <div class="set-row"><div class="s-k"><div class="t">AWS</div><div class="d">659587495971 · ap-south-1 · akash_soni</div></div><span class="s-v ok">GO · proven 4 shapes + day-2</span></div>
+            <div class="set-row"><div class="s-k"><div class="t">Google Cloud</div><div class="d">CLI + ADC required (2-step — commonly missed)</div></div><span class="s-v ok">GO · proven 3 shapes + incident cycle</span></div>
+            <div class="set-row"><div class="s-k"><div class="t">Azure</div><div class="d">az 2.88 installed · commands pre-verified 15/15</div></div><span class="s-v warn">NOT CONNECTED — az login to begin</span><button class="amend">CONNECT</button></div>
+          </div>
+        </details>
+        <details class="sec" id="s-pol">
+          <summary><span class="chev">▸</span><h3>Execution policies</h3><span class="hint">amendments require sign-off</span></summary>
+          <div class="sec-body">
+            <div class="set-row"><div class="s-k"><div class="t">Approval scope</div><div class="d">one signature = one run</div></div><span class="s-v ok">per-run · standing orders listed &amp; revocable</span><button class="amend">AMEND</button></div>
+            <div class="set-row"><div class="s-k"><div class="t">Sustained watch</div><div class="d">post-deploy canary window</div></div><span class="s-v">120 s min · 10 s cadence · 2-strike revert</span><button class="amend">AMEND</button></div>
+            <div class="set-row"><div class="s-k"><div class="t">Error-budget gate</div><div class="d">SLO 99.9% · 30d window</div></div><span class="s-v">block deploys below 20% budget</span><button class="amend">AMEND</button></div>
+            <div class="set-row"><div class="s-k"><div class="t">Schema changes</div><div class="d">migrations policy</div></div><span class="s-v">snapshot first · destructive = disclose + expand/contract</span><button class="amend">AMEND</button></div>
+            <div class="set-row"><div class="s-k"><div class="t">Secrets</div><div class="d">the product promise</div></div><span class="s-v ok">values never reach the model — not amendable</span></div>
+            <div class="pol-note">every AMEND is itself a runbook (RB-90) — the policy change appears in the journal with your signature.</div>
+          </div>
+        </details>
+        <details class="sec" id="s-conn">
+          <summary><span class="chev">▸</span><h3>Connectors</h3><span class="hint">notify + repo</span></summary>
+          <div class="sec-body">
+            <div class="set-row"><div class="s-k"><div class="t">GitHub</div><div class="d">PAT in encrypted vault</div></div><span class="s-v ok">connected · repo watch ready</span><button class="amend">ROTATE</button></div>
+            <div class="set-row"><div class="s-k"><div class="t">Slack webhook</div><div class="d">critical incidents + reverts</div></div><span class="s-v">configured · scrubbed before every post</span><button class="amend">TEST</button></div>
+            <div class="set-row"><div class="s-k"><div class="t">Discord / generic</div><div class="d">optional</div></div><span class="s-v" style="color:var(--dim)">not configured</span><button class="amend">ADD</button></div>
+          </div>
+        </details>
+        <details class="sec danger" id="s-danger">
+          <summary><span class="chev">▸</span><h3>Danger zone</h3><span class="hint" style="color:var(--red)">every action here is RB-99 family</span></summary>
+          <div class="sec-body">
+            <div class="danger-row"><div><div class="t">Destroy acme-store-stg</div><div class="d">staging twin · saves $31.40/mo · runs teardown + residue proof</div></div><button>RUN RB-99 ▸</button></div>
+            <div class="danger-row"><div><div class="t">Destroy acme-store</div><div class="d">PRODUCTION — requires typed confirmation + fresh signature</div></div><button>RUN RB-99 ▸</button></div>
+            <div class="danger-row"><div><div class="t">Revoke all standing orders</div><div class="d">stops schedules, watchers, auto-deploys immediately</div></div><button>REVOKE ALL</button></div>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+// view switching
+const views = document.getElementById('views');
+views.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('nav.views button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + b.dataset.v));
+});
+// settings subnav → open + scroll
+document.getElementById('set-nav').addEventListener('click', (e) => {
+  const a = e.target.closest('a'); if (!a) return;
+  document.querySelectorAll('#set-nav a').forEach(x => x.classList.toggle('on', x === a));
+  const sec = document.getElementById(a.dataset.t); sec.open = true; sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+// live probe strip + elapsed — the running step advances to VERIFIED
+const strip = document.getElementById('probe-strip');
+for (let i = 0; i < 12; i++) { const d = document.createElement('div'); d.className = 'probe' + (i < 7 ? ' hit' : ''); strip.appendChild(d); }
+let probes = 7, sec = 161;
+const t = setInterval(() => {
+  sec += 2;
+  document.getElementById('elapsed').textContent = 'T+' + String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+  if (probes < 12 && sec % 4 === 1) {
+    strip.children[probes].classList.add('hit'); probes++;
+    document.getElementById('probe-txt').textContent = `probe ${probes}/12 · 10s cadence · 2-strike revert armed`;
+    if (probes === 12) {
+      const w = document.getElementById('step-watch'); w.classList.remove('run'); w.classList.add('done');
+      w.querySelector('.st-t').innerHTML = '<b>Deploy + sustained watch</b> — <span class="st-chk">✓ 12/12 healthy across ~120s · 0 blips</span>';
+      const d6 = document.getElementById('step-declare'); d6.classList.add('done');
+      d6.querySelector('.st-t').innerHTML = '<b>Declare verified</b> — <span class="st-chk">✓ RELEASE VERIFIED · journal entry sealed · evidence retained</span>';
+      document.querySelector('.rb-foot .spacer').insertAdjacentHTML('beforebegin', '<span class="stamp" style="font-size:11px">VERIFIED · HTTP 200 ×12</span>');
+      clearInterval(t);
+    }
+  }
+}, 2000);
+</script>
+</body>
+</html>

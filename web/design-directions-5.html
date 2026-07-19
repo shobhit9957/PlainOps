@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PlainOps — design directions · batch 05 · OPERATIONS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Archivo:wght@600;700;800&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #101013; color: #DDD; font-family: "IBM Plex Sans", sans-serif; padding: 30px 26px 60px; }
+  .intro h1 { font-size: 21px; margin-bottom: 4px; }
+  .intro p { color: #999; font-size: 13px; max-width: 900px; margin-bottom: 30px; }
+  .direction { margin-bottom: 48px; }
+  .direction > .label { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  .direction > .label h2 { font-size: 16px; color: #EEE; white-space: nowrap; }
+  .direction > .label span { font-size: 12.5px; color: #888; }
+  .mono { font-family: "IBM Plex Mono", monospace; }
+
+  /* ═════════ 17 · SLO WALL (status + error budget) ═════════ */
+  .slo { background: #FFFFFF; color: #17191D; border: 1px solid #E4E7EB; border-radius: 8px; padding: 20px 24px; box-shadow: 0 14px 40px rgba(0,0,0,.5); }
+  .slo .s-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  .slo .s-top h3 { font-size: 15px; }
+  .slo .allok { font-size: 12px; font-weight: 600; color: #0E7A46; background: #E6F4EC; border: 1px solid #B5E0C7; padding: 5px 12px; border-radius: 999px; }
+  .slo .comp { padding: 11px 0; border-top: 1px solid #EEF0F3; }
+  .slo .c-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+  .slo .c-name { font-weight: 600; font-size: 13px; }
+  .slo .c-uptime { margin-left: auto; font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: #57606A; }
+  .slo .ticks { display: flex; gap: 2px; height: 26px; align-items: stretch; }
+  .slo .tick { flex: 1; border-radius: 1.5px; background: #22A55C; }
+  .slo .tick.deg { background: #D9A03F; }
+  .slo .tick.out { background: #D93F3F; }
+  .slo .tick.rev { background: repeating-linear-gradient(45deg, #D9A03F 0 3px, #22A55C 3px 6px); }
+  .slo .budget { display: flex; gap: 26px; margin-top: 16px; padding-top: 14px; border-top: 2px solid #17191D; align-items: center; }
+  .slo .b-block { flex: 1; }
+  .slo .b-lbl { font-size: 10px; letter-spacing: 1.5px; color: #8A929B; margin-bottom: 6px; }
+  .slo .b-bar { height: 12px; border-radius: 3px; background: #EEF0F3; overflow: hidden; position: relative; }
+  .slo .b-bar i { display: block; height: 100%; background: linear-gradient(90deg, #22A55C 70%, #D9A03F); }
+  .slo .b-val { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: #57606A; margin-top: 5px; }
+  .slo .gate-verdict { flex: 0 0 240px; border: 1.5px solid #17191D; border-radius: 6px; padding: 10px 14px; }
+  .slo .gv-h { font-size: 9.5px; letter-spacing: 1.8px; color: #8A929B; }
+  .slo .gv-v { font-weight: 700; font-size: 14px; color: #0E7A46; margin-top: 3px; }
+  .slo .gv-s { font-size: 10.5px; color: #57606A; margin-top: 2px; }
+
+  /* ═════════ 18 · INCIDENT COMMAND ═════════ */
+  .ic { background: #121316; border: 1px solid #26282E; border-radius: 8px; overflow: hidden; box-shadow: 0 14px 40px rgba(0,0,0,.55); }
+  .ic .ic-band { display: flex; align-items: center; gap: 14px; padding: 11px 18px; background: #1A1114; border-bottom: 1px solid #3A1A20; }
+  .ic .sev { font: 800 12px "Archivo", sans-serif; letter-spacing: 1.5px; background: #D93F3F; color: #fff; padding: 4px 11px; border-radius: 4px; }
+  .ic .ic-title { font-weight: 600; font-size: 13.5px; color: #F1E9E9; }
+  .ic .ic-meta { margin-left: auto; display: flex; gap: 16px; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: #9A8F91; }
+  .ic .ic-meta b { color: #F1E9E9; font-weight: 500; }
+  .ic .ic-body { display: flex; }
+  .ic .tl { flex: 1.5; padding: 16px 20px; border-right: 1px solid #26282E; }
+  .ic .tl-item { display: flex; gap: 14px; padding: 7px 0; font-size: 12px; }
+  .ic .tl-t { flex: 0 0 52px; font-family: "IBM Plex Mono", monospace; color: #6E747E; font-size: 11px; padding-top: 1px; }
+  .ic .tl-dot { flex: 0 0 10px; position: relative; }
+  .ic .tl-dot::before { content: ""; position: absolute; left: 4px; top: 6px; width: 7px; height: 7px; border-radius: 50%; background: #6E747E; }
+  .ic .tl-dot.evt::before { background: #D93F3F; box-shadow: 0 0 8px rgba(217,63,63,.7); }
+  .ic .tl-dot.act::before { background: #D9A03F; }
+  .ic .tl-dot.fix::before { background: #35B573; box-shadow: 0 0 8px rgba(53,181,115,.6); }
+  .ic .tl-dot::after { content: ""; position: absolute; left: 7px; top: 15px; bottom: -10px; width: 1px; background: #26282E; }
+  .ic .tl-item:last-child .tl-dot::after { display: none; }
+  .ic .tl-txt { color: #C6CBD3; line-height: 1.5; }
+  .ic .tl-txt b { color: #F3F5F8; font-weight: 600; }
+  .ic .tl-txt .pin { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: #8FA6C8; background: #171B22; border: 1px solid #263042; border-radius: 3px; padding: 1px 7px; margin-left: 6px; }
+  .ic .roles { flex: 1; padding: 16px 20px; }
+  .ic .roles h4 { font-size: 10px; letter-spacing: 2px; color: #6E747E; margin-bottom: 10px; }
+  .ic .role { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #1D1F24; font-size: 12px; }
+  .ic .role b { font-family: "IBM Plex Mono", monospace; font-weight: 500; color: #E8EBEF; }
+  .ic .role span { color: #6E747E; }
+  .ic .mttr { margin-top: 14px; background: #16181C; border: 1px solid #26282E; border-radius: 6px; padding: 10px 14px; display: flex; gap: 20px; }
+  .ic .m-b { text-align: center; }
+  .ic .m-v { font: 700 17px "Archivo", sans-serif; color: #35B573; }
+  .ic .m-l { font-size: 9px; letter-spacing: 1.5px; color: #6E747E; margin-top: 2px; }
+  .ic .resolve { margin-left: auto; align-self: center; }
+  .ic button { font: 700 11px "Archivo", sans-serif; letter-spacing: 1.5px; padding: 9px 16px; border-radius: 5px; border: 1px solid #2E3138; background: #1E2126; color: #C6CBD3; cursor: pointer; }
+  .ic button.res { background: #35B573; border-color: #35B573; color: #06130C; }
+
+  /* ═════════ 19 · TOPOLOGY / BLAST RADIUS ═════════ */
+  .topo { background: #0D1015; border: 1px solid #1C2430; border-radius: 8px; padding: 0; overflow: hidden; box-shadow: 0 14px 40px rgba(0,0,0,.55); }
+  .topo .t-head { display: flex; gap: 16px; padding: 10px 16px; border-bottom: 1px solid #1C2430; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: #64788F; background: #0F131A; }
+  .topo .t-head b { color: #D6E2F0; font-weight: 500; }
+  .topo .t-head .alert { color: #E0503C; margin-left: auto; }
+  .topo .canvas { position: relative; height: 270px; background: radial-gradient(circle, rgba(100,120,143,.14) 1px, transparent 1px); background-size: 24px 24px; }
+  .tnode { position: absolute; border: 1.5px solid #3A4A5F; background: #131A23; border-radius: 6px; padding: 8px 12px; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: #D6E2F0; min-width: 118px; }
+  .tnode .tn-sub { font-size: 9px; color: #64788F; margin-top: 2px; }
+  .tnode.ok { border-color: #2E7D5B; }
+  .tnode.ok::before { content: "●"; color: #46D39A; margin-right: 6px; }
+  .tnode.dead { border-color: #E0503C; background: #1D1113; }
+  .tnode.dead::before { content: "●"; color: #E0503C; margin-right: 6px; }
+  .tnode.blast { border-color: #C87E1B; background: repeating-linear-gradient(45deg, #131A23 0 6px, #1D1810 6px 12px); }
+  .tnode.blast::before { content: "�druck"; content: "◍"; color: #E8B33B; margin-right: 6px; }
+  .tedge { position: absolute; background: #2C3B4E; }
+  .tedge.h { height: 2px; } .tedge.v { width: 2px; }
+  .tedge.hot { background: #46D39A; box-shadow: 0 0 6px rgba(70,211,154,.5); }
+  .tedge.dead { background: #E0503C; box-shadow: 0 0 6px rgba(224,80,60,.6); }
+  .tedge .elbl { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); font-family: "IBM Plex Mono", monospace; font-size: 9px; color: #64788F; white-space: nowrap; background: #0D1015; padding: 0 4px; }
+  .topo .t-foot { border-top: 1px solid #1C2430; padding: 9px 16px; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: #64788F; background: #0F131A; }
+  .topo .t-foot b { color: #E8B33B; font-weight: 500; }
+
+  /* ═════════ 20 · LAUNCH STATUS BOARD (preflight GO/NO-GO) ═════════ */
+  .gonogo { background: #0E0F12; border: 1px solid #232630; border-radius: 8px; padding: 18px 22px; box-shadow: 0 14px 40px rgba(0,0,0,.55); font-family: "Archivo", sans-serif; }
+  .gonogo .g-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 16px; }
+  .gonogo .g-head h3 { font-size: 13px; letter-spacing: 3px; color: #E8EBF2; }
+  .gonogo .g-head .t-minus { margin-left: auto; font: 600 15px "IBM Plex Mono", monospace; color: #E8B33B; letter-spacing: 2px; }
+  .gonogo .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .gtile { border-radius: 5px; padding: 11px 13px; border: 1px solid #232630; background: #14161B; }
+  .gtile .g-sys { font-family: "IBM Plex Mono", monospace; font-size: 9.5px; letter-spacing: 1.2px; color: #767D8C; margin-bottom: 7px; }
+  .gtile .g-stat { font-weight: 800; font-size: 15px; letter-spacing: 2px; }
+  .gtile.go .g-stat { color: #46D39A; text-shadow: 0 0 12px rgba(70,211,154,.45); }
+  .gtile.nogo { border-color: #55231C; background: #170F0E; }
+  .gtile.nogo .g-stat { color: #E0503C; text-shadow: 0 0 12px rgba(224,80,60,.5); }
+  .gtile.cond { border-color: #4A3A14; }
+  .gtile.cond .g-stat { color: #E8B33B; text-shadow: 0 0 12px rgba(232,179,59,.45); }
+  .gtile .g-note { font-family: "IBM Plex Mono", monospace; font-size: 9px; color: #767D8C; margin-top: 5px; line-height: 1.5; }
+  .gonogo .poll { display: flex; align-items: center; gap: 16px; margin-top: 16px; border-top: 1px solid #232630; padding-top: 14px; }
+  .gonogo .poll .p-txt { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: #9AA1B0; line-height: 1.6; }
+  .gonogo .poll .p-txt b { color: #E8EBF2; font-weight: 500; }
+  .gonogo .commit { margin-left: auto; font: 800 13px "Archivo", sans-serif; letter-spacing: 3px; padding: 12px 26px; border-radius: 5px; background: #46D39A; color: #04170F; border: none; cursor: pointer; box-shadow: 0 0 22px rgba(70,211,154,.3); }
+  .gonogo .hold { font: 700 11px "Archivo", sans-serif; letter-spacing: 2px; padding: 12px 18px; border-radius: 5px; background: transparent; color: #E8B33B; border: 1.5px solid #4A3A14; cursor: pointer; }
+
+  /* ═════════ 21 · RUNBOOK EXECUTOR ═════════ */
+  .rb { background: #14161A; border: 1px solid #262A31; border-radius: 8px; padding: 18px 22px; box-shadow: 0 14px 40px rgba(0,0,0,.55); }
+  .rb .rb-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .rb .rb-h h3 { font-size: 14px; color: #E9ECF1; }
+  .rb .rb-h .rb-id { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: #6C7480; }
+  .rb .rb-h .elapsed { margin-left: auto; font-family: "IBM Plex Mono", monospace; font-size: 11px; color: #E8B33B; }
+  .rb .rb-sub { font-size: 11.5px; color: #6C7480; margin-bottom: 14px; }
+  .step { display: flex; gap: 14px; padding: 9px 0; border-top: 1px solid #1D2026; font-size: 12.5px; }
+  .step .st-n { flex: 0 0 30px; font-family: "IBM Plex Mono", monospace; color: #6C7480; }
+  .step .st-box { flex: 0 0 18px; height: 18px; border-radius: 4px; border: 1.5px solid #3A404A; position: relative; top: 1px; }
+  .step.done .st-box { background: #1E4634; border-color: #35B573; }
+  .step.done .st-box::after { content: "✓"; position: absolute; inset: 0; color: #46D39A; font-size: 12px; line-height: 17px; text-align: center; }
+  .step.run .st-box { border-color: #E8B33B; }
+  .step.run .st-box::after { content: ""; position: absolute; inset: 3px; border-radius: 2px; background: #E8B33B; animation: pulse2 1.2s ease-in-out infinite; }
+  @keyframes pulse2 { 50% { opacity: .3; } }
+  .step .st-t { color: #C9CED6; line-height: 1.55; }
+  .step .st-t b { color: #F0F2F5; font-weight: 600; }
+  .step .st-t .chk { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: #46D39A; }
+  .step .st-t .gatechk { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: #E8B33B; }
+  .step .st-who { margin-left: auto; font-family: "IBM Plex Mono", monospace; font-size: 10px; color: #6C7480; flex-shrink: 0; padding-top: 2px; }
+  .rb .signoff { margin-top: 12px; padding: 11px 14px; background: #191410; border: 1px solid #4A3A14; border-radius: 6px; display: flex; align-items: center; gap: 12px; font-size: 12px; color: #D9C9A3; }
+  .rb .signoff .sig-box { width: 18px; height: 18px; border: 1.5px dashed #E8B33B; border-radius: 4px; }
+  .rb .signoff button { margin-left: auto; font: 700 11px "Archivo", sans-serif; letter-spacing: 1.5px; padding: 8px 16px; border-radius: 5px; background: #E8B33B; border: none; color: #241B04; cursor: pointer; }
+
+  .verdict { color: #888; font-size: 12.5px; margin-top: -32px; margin-bottom: 42px; }
+</style>
+</head>
+<body>
+  <div class="intro">
+    <h1>Batch 05 — OPERATIONS. The visual language of running things, not writing them.</h1>
+    <p>Status walls, error budgets, incident command, topology with blast radius, GO/NO-GO polls, executable runbooks — mapped onto what PlainOps already does.</p>
+  </div>
+
+  <!-- ════════ 17 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 17 · SLO WALL</h2><span>uptime ticks + error budget as the product's spine. Signature: the error budget GATES deploys — "budget healthy → safe_deploy allowed" is a real SRE policy, rendered.</span></div>
+    <div class="slo">
+      <div class="s-top"><h3>acme-store — service levels · last 90 days</h3><span class="allok">● All systems operational · HTTP 200</span></div>
+      <div class="comp">
+        <div class="c-row"><span class="c-name">Gateway</span><span class="c-uptime">99.98% · 90d</span></div>
+        <div class="ticks">
+          <span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick deg"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick rev"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span>
+        </div>
+      </div>
+      <div class="comp">
+        <div class="c-row"><span class="c-name">Postgres 16</span><span class="c-uptime">100.00% · 90d</span></div>
+        <div class="ticks">
+          <span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span><span class="tick"></span>
+        </div>
+      </div>
+      <div class="budget">
+        <div class="b-block">
+          <div class="b-lbl">ERROR BUDGET — 30d WINDOW (SLO 99.9%)</div>
+          <div class="b-bar"><i style="width:62%"></i></div>
+          <div class="b-val">62% remaining · burn rate 0.4×/day · the 14:41 revert cost 3.1%</div>
+        </div>
+        <div class="gate-verdict">
+          <div class="gv-h">DEPLOY POLICY</div>
+          <div class="gv-v">✓ DEPLOYS ALLOWED</div>
+          <div class="gv-s">budget &gt; 20% — safe_deploy unlocked; below that, fixes only</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ 18 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 18 · INCIDENT COMMAND</h2><span>run_diagnosis output as an incident timeline with evidence pinned; the auto-revert is a logged mitigation. Signature: severity band + roles + MTTR — your 3am story told the way real SRE teams tell it.</span></div>
+    <div class="ic">
+      <div class="ic-band">
+        <span class="sev">SEV-2</span>
+        <span class="ic-title">acme-store — 503 at the edge · desired-count drift</span>
+        <div class="ic-meta"><span>opened <b>16:03:21</b></span><span>state <b>MITIGATED</b></span><span>id <b>INC-0047</b></span></div>
+      </div>
+      <div class="ic-body">
+        <div class="tl">
+          <div class="tl-item"><span class="tl-t">16:03</span><span class="tl-dot evt"></span><span class="tl-txt"><b>Detected</b> — watchtower: 2 consecutive probe failures, URL returns 503 <span class="pin">evidence #1 · probe log</span></span></div>
+          <div class="tl-item"><span class="tl-t">16:03</span><span class="tl-dot act"></span><span class="tl-txt"><b>Diagnosis ran</b> — ECS service desired=0, running=0; ALB target group empty; no deploy in audit window <span class="pin">evidence #2 · service state</span></span></div>
+          <div class="tl-item"><span class="tl-t">16:04</span><span class="tl-dot act"></span><span class="tl-txt"><b>Root cause pinned</b> — out-of-band change: desired-count set to 0 outside PlainOps <span class="pin">evidence #3 · drift</span></span></div>
+          <div class="tl-item"><span class="tl-t">16:04</span><span class="tl-dot fix"></span><span class="tl-txt"><b>Mitigation applied</b> — desired restored to 1 (founder-approved), service stabilized</span></div>
+          <div class="tl-item"><span class="tl-t">16:04</span><span class="tl-dot fix"></span><span class="tl-txt"><b>Verified</b> — HTTP 200 ×12 sustained · incident closed pending postmortem</span></div>
+        </div>
+        <div class="roles">
+          <h4>ROLES & RESPONSE</h4>
+          <div class="role"><b>plainops</b><span>incident commander · evidence</span></div>
+          <div class="role"><b>founder</b><span>approver · one click</span></div>
+          <div class="role"><b>watchtower</b><span>detection · 2-strike rule</span></div>
+          <div class="mttr">
+            <div class="m-b"><div class="m-v">22s</div><div class="m-l">DETECT</div></div>
+            <div class="m-b"><div class="m-v">41s</div><div class="m-l">DIAGNOSE</div></div>
+            <div class="m-b"><div class="m-v">73s</div><div class="m-l">MTTR</div></div>
+            <div class="resolve"><button class="res">RESOLVE ✓</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ 19 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 19 · TOPOLOGY / BLAST RADIUS</h2><span>the estate as a live service map with orthogonal routing (circuit discipline, no bouncy graphs). Signature: a failing node goes red and everything downstream hatches amber — the blast radius IS the diagnosis picture.</span></div>
+    <div class="topo">
+      <div class="t-head"><span>estate map</span><b>ap-south-1 · 6 nodes · 5 edges</b><span>layout: orthogonal · live edges</span><span class="alert">▲ 1 failing node · blast radius 2</span></div>
+      <div class="canvas">
+        <div class="tnode ok" style="left:30px; top:104px;">internet<div class="tn-sub">0.0.0.0/0</div></div>
+        <div class="tnode ok" style="left:212px; top:104px;">alb/po-acme<div class="tn-sub">2 targets · 0 5xx</div></div>
+        <div class="tnode ok" style="left:412px; top:40px;">gateway ×2<div class="tn-sub">412 rpm · p95 84ms</div></div>
+        <div class="tnode dead" style="left:412px; top:168px;">orders svc<div class="tn-sub">0 running · was 1</div></div>
+        <div class="tnode blast" style="left:626px; top:40px;">checkout flow<div class="tn-sub">degraded · upstream dead</div></div>
+        <div class="tnode blast" style="left:626px; top:168px;">postgres 16<div class="tn-sub">idle conns rising</div></div>
+        <div class="tedge h hot" style="left:148px; top:122px; width:64px;"><span class="elbl">https 412rpm</span></div>
+        <div class="tedge h hot" style="left:330px; top:122px; width:44px;"></div>
+        <div class="tedge v hot" style="left:374px; top:58px; height:64px;"></div>
+        <div class="tedge h hot" style="left:374px; top:58px; width:38px;"></div>
+        <div class="tedge v dead" style="left:374px; top:122px; height:64px;"></div>
+        <div class="tedge h dead" style="left:374px; top:186px; width:38px;"><span class="elbl" style="top:auto; bottom:-15px;">cloud-map · timeouts</span></div>
+        <div class="tedge h dead" style="left:530px; top:186px; width:96px;"></div>
+        <div class="tedge h" style="left:530px; top:58px; width:96px;"></div>
+      </div>
+      <div class="t-foot">run_diagnosis pinned: <b>orders desired=0 (out-of-band)</b> → blast: checkout degraded, pg idle climbing · fix restores 2 downstream nodes</div>
+    </div>
+  </section>
+
+  <!-- ════════ 20 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 20 · LAUNCH STATUS BOARD</h2><span>preflight_launch as a flight-director poll: every subsystem answers GO or NO-GO, and the deploy button only arms on a clean board. Signature: "GO for launch" is your approval gate — with T-minus as the sustained watch.</span></div>
+    <div class="gonogo">
+      <div class="g-head"><h3>PREFLIGHT POLL — ACME-STORE v2.4.1 → PRODUCTION</h3><span class="t-minus">T−00:02:00</span></div>
+      <div class="board">
+        <div class="gtile go"><div class="g-sys">QUOTA / FARGATE vCPU</div><div class="g-stat">GO</div><div class="g-note">8 needed · 140 available</div></div>
+        <div class="gtile go"><div class="g-sys">DB CONNECTIONS</div><div class="g-stat">GO</div><div class="g-note">max 4 tasks × 5 ≤ 81 ceiling</div></div>
+        <div class="gtile go"><div class="g-sys">BACKUPS / PITR</div><div class="g-stat">GO</div><div class="g-note">snapshot 14:10 · PITR 7d armed</div></div>
+        <div class="gtile go"><div class="g-sys">ALARMS / CANARY</div><div class="g-stat">GO</div><div class="g-note">R53 HC + 3 alarms wired</div></div>
+        <div class="gtile go"><div class="g-sys">BUDGET</div><div class="g-stat">GO</div><div class="g-note">est $38.20 vs $60 ceiling</div></div>
+        <div class="gtile cond"><div class="g-sys">EOL WATCH</div><div class="g-stat">COND</div><div class="g-note">node:20 EOL 04/26 — plan node:22</div></div>
+        <div class="gtile go"><div class="g-sys">ROLLBACK PATH</div><div class="g-stat">GO</div><div class="g-note">prev tag v…6258 retained</div></div>
+        <div class="gtile go"><div class="g-sys">STAGING PROOF</div><div class="g-stat">GO</div><div class="g-note">a2ee2b5 verified 200</div></div>
+      </div>
+      <div class="poll">
+        <div class="p-txt">Flight director: <b>board is GREEN with 1 CONDITIONAL</b> — conditional noted, does not block. Committing runs the sustained watch; any 2 consecutive failed probes trigger automatic revert.</div>
+        <button class="commit">COMMIT LAUNCH</button>
+        <button class="hold">HOLD</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ 21 ════════ -->
+  <section class="direction">
+    <div class="label"><h2>Direction 21 · RUNBOOK EXECUTOR</h2><span>safe_deploy as an executable runbook — each step self-verifies and shows who did it (engine vs founder). Signature: the amber sign-off box IS your approval gate, embedded in the procedure like a real change-management form.</span></div>
+    <div class="rb">
+      <div class="rb-h"><h3>RUNBOOK — Safe production release</h3><span class="rb-id">RB-SAFE-DEPLOY · rev 6 · proven 2026-07-19</span><span class="elapsed">elapsed 02:41</span></div>
+      <div class="rb-sub">Preconditions verified: repo attached · previous build retained · datastore snapshot capability confirmed</div>
+      <div class="step done"><span class="st-n">1.</span><span class="st-box"></span><span class="st-t"><b>Snapshot database</b> — po-acme-store-plainops-2026-07-20 <span class="chk">✓ restore point confirmed</span></span><span class="st-who">engine</span></div>
+      <div class="step done"><span class="st-n">2.</span><span class="st-box"></span><span class="st-t"><b>Lint migrations</b> — 1 destructive statement flagged &amp; disclosed (expand/contract) <span class="chk">✓ disclosed on card</span></span><span class="st-who">engine</span></div>
+      <div class="step done"><span class="st-n">3.</span><span class="st-box"></span><span class="st-t"><b>Run migrations as one-off task</b> — same image, same network, PGSSLMODE set <span class="chk">✓ exit 0 · 2 applied</span></span><span class="st-who">engine</span></div>
+      <div class="step run"><span class="st-n">4.</span><span class="st-box"></span><span class="st-t"><b>Deploy + sustained watch</b> — probe 7/12 · 10s cadence <span class="gatechk">watching…</span></span><span class="st-who">engine</span></div>
+      <div class="step"><span class="st-n">5.</span><span class="st-box"></span><span class="st-t"><b>Declare verified</b> — only on 12/12; otherwise auto-revert to v…6258 and stop</span><span class="st-who">engine</span></div>
+      <div class="signoff"><span class="sig-box"></span> Step 4 required founder sign-off before execution — signed 16:22:07 · this box is the approval gate, not decoration.<button>VIEW SIGNATURE</button></div>
+    </div>
+  </section>
+
+  <div class="verdict">Batches: 01 instruments · 03 technical instruments · 04 screen-native dev · 05 operations. All CSS + inline SVG, zero images.</div>
+</body>
+</html>
