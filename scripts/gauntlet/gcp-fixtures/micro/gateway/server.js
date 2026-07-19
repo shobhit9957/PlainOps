@@ -3,10 +3,26 @@
 const http = require('http');
 const port = process.env.PORT || 8080;
 
+// GCP service-to-service auth: internal Cloud Run services are IAM-gated, so
+// mint an ID token from the metadata server (audience = the target URL) and
+// send it as a Bearer token. The service runs as the shared runtime SA, which
+// has run.invoker on the internal services.
+async function idToken(audience) {
+  const r = await fetch(
+    `http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience=${encodeURIComponent(audience)}`,
+    { headers: { 'Metadata-Flavor': 'Google' }, signal: AbortSignal.timeout(5000) },
+  );
+  return r.text();
+}
+
 async function proxy(name, path) {
   const base = process.env[`${name.toUpperCase()}_URL`];
   if (!base) return { error: `${name}_URL not set` };
-  const r = await fetch(base + path, { signal: AbortSignal.timeout(8000) });
+  const token = await idToken(base);
+  const r = await fetch(base + path, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(8000),
+  });
   return r.json();
 }
 
