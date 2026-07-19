@@ -49,6 +49,40 @@ describe('destroyCloud', () => {
   });
 });
 
+describe('Azure resource-provider registration (fresh-subscription first deploy)', () => {
+  it('maps each archetype to exactly the providers its blueprint creates', async () => {
+    const { azureProvidersFor } = await import('../src/multicloud.js');
+    expect(azureProvidersFor('app', true)).toEqual([
+      'Microsoft.App', 'Microsoft.ContainerRegistry', 'Microsoft.OperationalInsights', 'Microsoft.DBforPostgreSQL',
+    ]);
+    expect(azureProvidersFor('app', false)).not.toContain('Microsoft.DBforPostgreSQL');
+    expect(azureProvidersFor('serverless', false)).toEqual(['Microsoft.Web', 'Microsoft.Storage']);
+    expect(azureProvidersFor('microservices', true)).toContain('Microsoft.DocumentDB');
+  });
+
+  it('registers only what is not already Registered, and never throws on failure', async () => {
+    const { ensureAzureProviders, defaultMcDeps } = await import('../src/multicloud.js');
+    const calls: string[][] = [];
+    const deps = {
+      ...defaultMcDeps,
+      runCli: async (_cloud: 'gcp' | 'azure', args: string[]) => {
+        calls.push(args);
+        if (args[1] === 'show') {
+          // Microsoft.App is registered already; the rest are not.
+          return { code: 0, stdout: args.includes('Microsoft.App') ? 'Registered\n' : 'NotRegistered\n', stderr: '' };
+        }
+        return { code: args.includes('Microsoft.Storage') ? 1 : 0, stdout: '', stderr: 'denied' }; // one failure path
+      },
+    };
+    const lines: string[] = [];
+    await ensureAzureProviders(['Microsoft.App', 'Microsoft.Web', 'Microsoft.Storage'], (l) => lines.push(l), deps as never);
+    const registers = calls.filter((a) => a[1] === 'register').map((a) => a[3]);
+    expect(registers).toEqual(['Microsoft.Web', 'Microsoft.Storage']); // App skipped
+    expect(calls.every((a) => a[0] === 'provider')).toBe(true);
+    expect(lines.join('\n')).toContain('az provider register --namespace Microsoft.Storage'); // honest fallback instruction
+  });
+});
+
 describe('deployGcp preflight', () => {
   it('fails cleanly for an unknown project', async () => {
     const { deployGcp } = await import('../src/multicloud.js');

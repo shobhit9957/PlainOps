@@ -23,6 +23,15 @@ export function renderProject(p: BlueprintParams, bootstrapBucket: string): stri
     fs.copyFileSync(path.join(FILES_DIR, f), path.join(dir, f));
   }
 
+  // withDatabase PROMISES the app a DATABASE_URL (the GCP/Azure blueprints
+  // hardwire the same contract in HCL). Enforce it here rather than trusting
+  // every caller to remember — a blueprint without it produced a silently
+  // database-less app.
+  const appSecrets =
+    p.withDatabase && !p.appSecrets.includes('DATABASE_URL')
+      ? ['DATABASE_URL', ...p.appSecrets]
+      : p.appSecrets;
+
   const tfvars = {
     project_name: p.projectName,
     region: p.region,
@@ -33,7 +42,7 @@ export function renderProject(p: BlueprintParams, bootstrapBucket: string): stri
     with_database: p.withDatabase,
     health_path: p.healthPath,
     container_port: p.containerPort,
-    app_secrets: p.appSecrets,
+    app_secrets: appSecrets,
     budget_email: p.budgetEmail ?? '',
     budget_monthly_usd: p.budgetMonthlyUsd,
     bootstrap_bucket: bootstrapBucket,

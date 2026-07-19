@@ -8,14 +8,14 @@ import { getProject } from '../../src/state.ts';
 import { destroy } from '../../src/orchestrator.ts';
 import { runAwsCli } from '../../src/awscli.ts';
 
-const target = process.argv[2];
+const targets = process.argv.slice(2);
 
 async function aws(args: string[], region = REGION): Promise<{ code: number; stdout: string; stderr: string }> {
   return runAwsCli([...args, '--region', region, '--output', 'json'], 120_000);
 }
 
 async function cleanExtras(): Promise<void> {
-  for (const proj of ['gtl-app', 'gtl-api', 'gtl-shop']) {
+  for (const proj of ['gtl-app', 'gtl-api', 'gtl-shop', 'gtl-mono', 'gtl-mono-stg']) {
     // EventBridge schedules + the narrow scheduler role.
     const list = await aws(['scheduler', 'list-schedules', '--name-prefix', `po-${proj}-`]);
     if (list.code === 0) {
@@ -74,15 +74,17 @@ async function cleanExtras(): Promise<void> {
   log('extras cleanup complete');
 }
 
-if (target === 'extras') {
-  await cleanExtras();
-} else {
-  const p = getProject(target ?? '');
+for (const target of targets) {
+  if (target === 'extras') {
+    await cleanExtras();
+    continue;
+  }
+  const p = getProject(target);
   if (!p) {
     console.error(`Unknown project: ${target}`);
     process.exit(2);
   }
   log(`=== DESTROY ${target} ===`);
-  await destroy(target!, log);
+  await destroy(target, log);
   log(`${target} torn down.`);
 }

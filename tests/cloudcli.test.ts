@@ -1,5 +1,33 @@
 import { describe, it, expect } from 'vitest';
-import { classifyCloud } from '../src/clouds/cloudcli.js';
+import { classifyCloud, azureChildEnv } from '../src/clouds/cloudcli.js';
+
+describe('credential-exposing az commands are denied', () => {
+  it('refuses commands that PRINT fresh or existing credentials', () => {
+    // create-for-rbac mints a service principal and prints its client secret;
+    // list-publishing-credentials / acr credential renew return live secrets.
+    expect(classifyCloud('azure', ['ad', 'sp', 'create-for-rbac', '--json-auth']).kind).toBe('denied');
+    expect(classifyCloud('azure', ['webapp', 'deployment', 'list-publishing-credentials', '--name', 'x']).kind).toBe('denied');
+    expect(classifyCloud('azure', ['functionapp', 'deployment', 'list-publishing-credentials', '--name', 'x']).kind).toBe('denied');
+    expect(classifyCloud('azure', ['acr', 'credential', 'renew', '--name', 'x']).kind).toBe('denied');
+  });
+});
+
+describe('azureChildEnv — az child-process hardening', () => {
+  it('auto-installs extensions instead of prompting (non-TTY children cannot answer prompts)', () => {
+    const env = azureChildEnv({ PATH: 'x' });
+    expect(env.AZURE_EXTENSION_USE_DYNAMIC_INSTALL).toBe('yes_without_prompt');
+    expect(env.AZURE_EXTENSION_RUN_AFTER_DYNAMIC_INSTALL).toBe('true');
+    expect(env.AZURE_CORE_ONLY_SHOW_ERRORS).toBe('true');
+    expect(env.AZURE_CORE_NO_COLOR).toBe('true');
+    expect(env.PATH).toBe('x'); // base env preserved
+  });
+
+  it('never overrides values the founder set themselves', () => {
+    const env = azureChildEnv({ AZURE_EXTENSION_USE_DYNAMIC_INSTALL: 'no', AZURE_CORE_ONLY_SHOW_ERRORS: 'false' });
+    expect(env.AZURE_EXTENSION_USE_DYNAMIC_INSTALL).toBe('no');
+    expect(env.AZURE_CORE_ONLY_SHOW_ERRORS).toBe('false');
+  });
+});
 
 describe('classifyCloud — gcloud', () => {
   it('classifies list/describe commands as read', () => {

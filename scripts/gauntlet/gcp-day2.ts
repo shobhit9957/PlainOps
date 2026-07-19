@@ -29,9 +29,12 @@ async function main(): Promise<string> {
       return `file: ${plan.fileName}\nsecrets: ${plan.secretsNeeded.join(', ')}\nnote: ${plan.note}\n---\n${plan.yaml.slice(0, 700)}`;
     }
     case 'chaos-break': {
-      // Out-of-band: delete the Cloud Run service so drift/diagnosis must catch it.
+      // Out-of-band: delete a Cloud Run service so drift/diagnosis must catch it.
+      // Micro stacks have one service per microservice — pick by suffix arg.
       const { runCloudCli } = await import('../../src/clouds/cloudcli.ts');
-      const svc = p!.outputs?.service_name ?? `po-${p!.name}`;
+      const { gcpServiceNames } = await import('../../src/diagnosis.ts');
+      const names = gcpServiceNames(p!);
+      const svc = (rest[0] && names.find((n) => n.endsWith(rest[0]))) ?? names[names.length - 1];
       const r = await runCloudCli('gcp', ['run', 'services', 'delete', svc, '--region', p!.region, '--project', p!.cloudTarget!, '--quiet'], 120_000);
       return r.code === 0 ? `CHAOS: deleted Cloud Run service ${svc} out-of-band` : `delete failed: ${(r.stderr || r.stdout).split('\n').pop()}`;
     }

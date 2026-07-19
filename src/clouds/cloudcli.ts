@@ -58,7 +58,11 @@ const DENIED_SEQUENCES: Record<CloudId, string[]> = {
     'keyvault secret download',
     'keyvault key download',
     'acr credential show',
+    'acr credential renew',
     'acr login',
+    'ad sp create-for-rbac',
+    'webapp deployment list-publishing-credentials',
+    'functionapp deployment list-publishing-credentials',
     'storage account keys list',
     'storage account keys renew',
     'cosmosdb keys list',
@@ -115,6 +119,24 @@ export function quoteForCmdShell(arg: string): string {
   return `"${arg.replace(/"/g, '""')}"`;
 }
 
+/**
+ * Environment for az child processes. Some az command groups live in
+ * EXTENSIONS (and what is core vs extension changes across az versions);
+ * by default az PROMPTS before installing one — which, run from a non-TTY
+ * child process, fails with a confusing "unable to prompt" error (the same
+ * failure class as gcloud's "enable API? (y/N)" hang). Install needed
+ * extensions automatically and keep warnings out of parsed output.
+ */
+export function azureChildEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return {
+    ...base,
+    AZURE_EXTENSION_USE_DYNAMIC_INSTALL: base.AZURE_EXTENSION_USE_DYNAMIC_INSTALL ?? 'yes_without_prompt',
+    AZURE_EXTENSION_RUN_AFTER_DYNAMIC_INSTALL: base.AZURE_EXTENSION_RUN_AFTER_DYNAMIC_INSTALL ?? 'true',
+    AZURE_CORE_ONLY_SHOW_ERRORS: base.AZURE_CORE_ONLY_SHOW_ERRORS ?? 'true',
+    AZURE_CORE_NO_COLOR: base.AZURE_CORE_NO_COLOR ?? 'true',
+  };
+}
+
 export function runCloudCli(cloud: CloudId, args: string[], timeoutMs = 120_000): Promise<CloudCliResult> {
   const bin = resolveCloudBin(cloud);
   // gcloud.cmd / az.cmd are batch files — Windows can only exec those through
@@ -128,7 +150,13 @@ export function runCloudCli(cloud: CloudId, args: string[], timeoutMs = 120_000)
       // the default install location) must be quoted too, not just the args.
       needsShell ? quoteForCmdShell(bin) : bin,
       needsShell ? args.map(quoteForCmdShell) : args,
-      { timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024, shell: needsShell, windowsHide: true },
+      {
+        timeout: timeoutMs,
+        maxBuffer: 8 * 1024 * 1024,
+        shell: needsShell,
+        windowsHide: true,
+        ...(cloud === 'azure' ? { env: azureChildEnv(process.env) } : {}),
+      },
       (err, stdout, stderr) => {
         resolve({
           code: err && typeof (err as { code?: number }).code === 'number' ? (err as { code: number }).code : err ? 1 : 0,

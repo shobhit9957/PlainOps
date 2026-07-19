@@ -7,6 +7,44 @@ beforeEach(() => {
   process.env.PLAINOPS_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'po-diag-'));
 });
 
+describe('service-name resolution for evidence collection', () => {
+  it('GCP microservices: one Cloud Run service per microservice, never po-<project>', async () => {
+    const { gcpServiceNames } = await import('../src/diagnosis.js');
+    const names = gcpServiceNames({
+      name: 'shop',
+      outputs: { service_urls: JSON.stringify({ gateway: 'https://g', orders: 'https://o' }) },
+    });
+    // The old guess (po-shop) described a service that does not exist.
+    expect(names).toEqual(['po-shop-gateway', 'po-shop-orders']);
+  });
+
+  it('GCP app: uses the service_name output when present', async () => {
+    const { gcpServiceNames } = await import('../src/diagnosis.js');
+    expect(gcpServiceNames({ name: 'web', outputs: { service_name: 'po-web' } })).toEqual(['po-web']);
+  });
+
+  it('GCP: falls back to po-<name> when outputs are missing or corrupt', async () => {
+    const { gcpServiceNames } = await import('../src/diagnosis.js');
+    expect(gcpServiceNames({ name: 'x', outputs: undefined })).toEqual(['po-x']);
+    expect(gcpServiceNames({ name: 'x', outputs: { service_urls: '{oops' } })).toEqual(['po-x']);
+  });
+
+  it('Azure microservices: Container Apps are named after the services themselves', async () => {
+    const { azureAppNames } = await import('../src/diagnosis.js');
+    const names = azureAppNames({
+      name: 'shop',
+      archetype: 'microservices',
+      outputs: { service_urls: JSON.stringify({ gateway: 'https://g', cart: 'https://c' }) },
+    });
+    expect(names).toEqual(['gateway', 'cart']);
+  });
+
+  it('Azure app: po-<name> for the single-app shape', async () => {
+    const { azureAppNames } = await import('../src/diagnosis.js');
+    expect(azureAppNames({ name: 'web', archetype: 'app', outputs: {} })).toEqual(['po-web']);
+  });
+});
+
 describe('collectDiagnosis', () => {
   it('errors clearly for an unknown project', async () => {
     const { collectDiagnosis } = await import('../src/diagnosis.js');

@@ -46,6 +46,36 @@ async function cloudRead(cloud: 'gcp' | 'azure', args: string[]): Promise<string
   return res.stdout;
 }
 
+/**
+ * Cloud Run service names for a project. A microservices stack has one service
+ * PER microservice (po-<project>-<svc>) and no `service_name` output — guessing
+ * `po-<project>` there made the evidence collector describe a service that
+ * doesn't exist and filter logs down to nothing.
+ */
+export function gcpServiceNames(p: Pick<Project, 'name' | 'outputs'>): string[] {
+  if (p.outputs?.service_name) return [p.outputs.service_name];
+  if (p.outputs?.service_urls) {
+    try {
+      return Object.keys(JSON.parse(p.outputs.service_urls)).map((s) => `po-${p.name}-${s}`);
+    } catch {
+      /* fall through to the single-service guess */
+    }
+  }
+  return [`po-${p.name}`];
+}
+
+/** Azure Container App names — microservices apps are named after the service itself. */
+export function azureAppNames(p: Pick<Project, 'name' | 'outputs' | 'archetype'>): string[] {
+  if (p.archetype === 'microservices' && p.outputs?.service_urls) {
+    try {
+      return Object.keys(JSON.parse(p.outputs.service_urls));
+    } catch {
+      /* fall through */
+    }
+  }
+  return [`po-${p.name}`];
+}
+
 function projectFacts(p: Project): string {
   return JSON.stringify(
     {
@@ -142,18 +172,23 @@ export async function collectDiagnosis(projectName: string, errorText?: string, 
   } else if (cloud === 'gcp') {
     const gcpProject = p.cloudTarget;
     if (gcpProject) {
-      const svc = p.outputs?.service_name ?? `po-${p.name}`;
-      items.push(
-        await tryItem(`Cloud Run state (${svc})`, () =>
-          cloudRead('gcp', ['run', 'services', 'describe', svc, '--region', p.region, '--project', gcpProject, '--format=json(status)']),
-        ),
-      );
+      // Microservices stacks have one Cloud Run service per microservice.
+      for (const svc of gcpServiceNames(p).slice(0, 4)) {
+        items.push(
+          await tryItem(`Cloud Run state (${svc})`, () =>
+            cloudRead('gcp', ['run', 'services', 'describe', svc, '--region', p.region, '--project', gcpProject, '--format=json(status)']),
+          ),
+        );
+      }
       items.push(
         await tryItem('Cloud Run logs (last 50 lines)', () =>
           cloudRead('gcp', [
             'logging', 'read',
-            `resource.type=cloud_run_revision AND resource.labels.service_name=${svc}`,
-            '--project', gcpProject, '--limit', '50', '--format=value(severity,textPayload)', '--freshness=1h',
+            // Substring match (:) covers every service of a micro stack.
+            `resource.type=cloud_run_revision AND resource.labels.service_name:"po-${p.name}"`,
+            '--project', gcpProject, '--limit', '50',
+            '--format=value(resource.labels.service_name,severity,firstof(textPayload,jsonPayload.message,httpRequest.requestUrl))',
+            '--freshness=1h',
           ]),
         ),
       );
@@ -168,10 +203,10 @@ export async function collectDiagnosis(projectName: string, errorText?: string, 
         ),
       );
     } else {
-      const appName = p.archetype === 'microservices' ? undefined : `po-${p.name}`;
-      if (appName) {
+      // Microservices: one Container App per service, named after the service.
+      for (const appName of azureAppNames(p).slice(0, 4)) {
         items.push(
-          await tryItem('Container App state', () =>
+          await tryItem(`Container App state (${appName})`, () =>
             cloudRead('azure', ['containerapp', 'show', '--name', appName, '--resource-group', rg, '--query', '{running:properties.runningStatus,fqdn:properties.configuration.ingress.fqdn,provisioning:properties.provisioningState}', '--output', 'json']),
           ),
         );

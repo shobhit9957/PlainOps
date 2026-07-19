@@ -127,6 +127,42 @@ Deletion cannot be cancelled. Budget ~6 minutes to create, up to ~10 to delete.
 
 ---
 
+## Migrations fail with `FATAL 28000` / `ClientAuthentication` (exit code 1)
+
+**Signature** (from the one-off migration task's logs):
+
+```
+severity: 'FATAL', code: '28000', file: 'auth.c', routine: 'ClientAuthentication'
+```
+
+**Cause:** RDS PostgreSQL 15+ defaults `rds.force_ssl = 1`. The app connects
+fine because it sets `ssl` explicitly, but migration CLIs read the plain
+`DATABASE_URL` and get rejected for connecting without TLS.
+
+**Fix (already in `run_migrations`):** node-postgres-based tools
+(node-pg-migrate, Knex, Sequelize, TypeORM) get `PGSSLMODE=no-verify` injected
+into the one-off task, which makes them use TLS the way the app does. If you
+run a migration by hand through `aws_cli`, add that env var yourself. Python/
+Ruby tools use libpq, which rejects `no-verify` — use `PGSSLMODE=require`
+there instead.
+
+Diagnosed live 2026-07-19: the snapshot taken before the failed run was the
+restore point, production never deployed — the ordering held.
+
+---
+
+## Safe deploy reverted a release that "worked when I tested it"
+
+`safe_deploy`'s health gate is a **sustained watch**, not a single ping: it
+probes the URL every 10 s for the whole watch window and reverts on two
+consecutive failures. A release that serves its first request and dies two
+minutes later (memory leak, connection-pool exhaustion, time-bomb config) is
+exactly what it exists to catch. Read the gate log lines — they show the
+precise check number where the release went bad; `run_diagnosis` collects the
+matching container logs.
+
+---
+
 ## DocumentDB: `Unsupported mechanism [-301]`
 
 **Cause:** DocumentDB requires TLS by default and the driver/URI combination fails.

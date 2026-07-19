@@ -113,7 +113,10 @@ az account set --subscription "YOUR_SUBSCRIPTION_NAME_OR_ID"
 ```
 
 **You do NOT need to pre-create resource groups or enable resource providers** —
-the blueprints create the resource group and everything in it.
+the blueprints create the resource group and everything in it, and on a fresh
+subscription the deploy registers the resource providers it needs
+(`Microsoft.App`, `Microsoft.ContainerRegistry`, …) automatically before the
+first apply — you'll see a one-time "Registering…" line per provider.
 
 **Verify:**
 ```bash

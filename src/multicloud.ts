@@ -87,6 +87,38 @@ async function requireAzureReady(): Promise<string> {
   return status.azure.target ?? 'active subscription';
 }
 
+/**
+ * Resource providers each Azure archetype needs. A FRESH subscription has
+ * none of them registered, and the blueprints deliberately register nothing
+ * (`resource_provider_registrations = "none"` keeps plans deterministic) —
+ * so the deploy registers them explicitly, exactly like the GCP blueprints
+ * enable their own APIs (the same first-deploy failure class we fixed live
+ * on GCP: PERMISSION_DENIED there, MissingSubscriptionRegistration here).
+ */
+export function azureProvidersFor(archetype: Archetype, withDatabase: boolean): string[] {
+  if (archetype === 'serverless') return ['Microsoft.Web', 'Microsoft.Storage'];
+  const base = ['Microsoft.App', 'Microsoft.ContainerRegistry', 'Microsoft.OperationalInsights'];
+  if (archetype === 'microservices') return withDatabase ? [...base, 'Microsoft.DocumentDB'] : base;
+  return withDatabase ? [...base, 'Microsoft.DBforPostgreSQL'] : base;
+}
+
+/** Register any unregistered provider (idempotent; part of the approved deploy). */
+export async function ensureAzureProviders(
+  namespaces: string[],
+  log: (l: string) => void,
+  deps: MultiCloudDeps = defaultMcDeps,
+): Promise<void> {
+  for (const ns of namespaces) {
+    const q = await deps.runCli('azure', ['provider', 'show', '--namespace', ns, '--query', 'registrationState', '--output', 'tsv'], 30_000);
+    if (q.code === 0 && q.stdout.trim() === 'Registered') continue;
+    log(`Registering the Azure resource provider ${ns} (first use on this subscription — one-time)…`);
+    const r = await deps.runCli('azure', ['provider', 'register', '--namespace', ns, '--wait'], 600_000);
+    if (r.code !== 0) {
+      log(`⚠ Could not register ${ns} automatically. If the deploy fails with MissingSubscriptionRegistration, run: az provider register --namespace ${ns}`);
+    }
+  }
+}
+
 async function cli(deps: MultiCloudDeps, cloud: CloudId, args: string[], log: (l: string) => void, timeoutMs: number, failMsg: string): Promise<string> {
   const res = await deps.runCli(cloud, args, timeoutMs);
   if (res.code !== 0) {
@@ -312,6 +344,7 @@ async function azureApp(name: string, opts: CloudDeployOptions, log: (l: string)
     app_secrets: [] as string[],
   };
 
+  await ensureAzureProviders(azureProvidersFor('app', baseVars.with_database), log, deps);
   log('Creating Azure resources (Container Apps, Container Registry' + (baseVars.with_database ? ', PostgreSQL — the database takes ~10 min' : '') + ')…');
   let dir = renderCloudBlueprint('azure-app', name, baseVars);
   await deps.applyProject(dir, log);
@@ -336,6 +369,7 @@ async function azureServerless(name: string, opts: CloudDeployOptions, log: (l: 
     throw new Error(`An Azure Functions deploy needs a host.json at the root of ${source} (plus one folder per function with function.json + index.js).`);
   }
 
+  await ensureAzureProviders(azureProvidersFor('serverless', false), log, deps);
   log('Creating Azure resources (Function App, Storage queue + table — ~2–4 min)…');
   const dir = renderCloudBlueprint('azure-serverless', name, { project_name: name, region: project.region });
   await deps.applyProject(dir, log);
@@ -379,6 +413,7 @@ async function azureMicroservices(name: string, opts: CloudDeployOptions, log: (
     with_cache: detected.withCache,
   };
 
+  await ensureAzureProviders(azureProvidersFor('microservices', detected.withDatabase), log, deps);
   log('Creating the platform (Container Apps environment + registry' + (detected.withDatabase ? ' + Cosmos DB' : '') + ')…');
   let dir = renderCloudBlueprint('azure-microservices', name, baseVars);
   await deps.applyProject(dir, log);

@@ -118,6 +118,10 @@ export async function provision(name: string, onEvent: EventSink, deps: Orchestr
     if (secretArns.DATABASE_URL) {
       await deps.putAppSecret(project.region, secretArns.DATABASE_URL, dbUrl);
       log('DATABASE_URL stored in your AWS Secrets Manager (never sent to the AI).');
+    } else {
+      // render.ts guarantees the shell exists when withDatabase — if this ever
+      // fires, say so loudly instead of shipping a silently database-less app.
+      log('⚠ The database exists but no DATABASE_URL secret shell came back from the blueprint — the app will NOT get a connection string. Re-provision; if it persists this is a bug.');
     }
   }
 

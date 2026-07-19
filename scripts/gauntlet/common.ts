@@ -4,12 +4,19 @@ import path from 'node:path';
 import os from 'node:os';
 
 export const REGION = 'ap-south-1';
-export const GAUNTLET_HOME = path.join(os.homedir(), '.plainops-gauntlet');
 
-if (path.resolve(process.env.PLAINOPS_HOME ?? '') !== GAUNTLET_HOME) {
-  console.error(`REFUSING to run: PLAINOPS_HOME must be ${GAUNTLET_HOME}`);
+// Isolated homes only: ~/.plainops-gauntlet or ~/.plainops-gauntlet-<suffix>
+// (a second home lets AWS and GCP ladders run in parallel without racing on
+// the same state.json). NEVER the founder's real ~/.plainops.
+const resolvedHome = path.resolve(process.env.PLAINOPS_HOME ?? '');
+const okHome =
+  path.dirname(resolvedHome) === os.homedir() &&
+  /^\.plainops-gauntlet(-[a-z0-9]+)?$/.test(path.basename(resolvedHome));
+if (!okHome) {
+  console.error(`REFUSING to run: PLAINOPS_HOME must be ~/.plainops-gauntlet or ~/.plainops-gauntlet-<suffix>, got "${resolvedHome}"`);
   process.exit(2);
 }
+export const GAUNTLET_HOME = resolvedHome;
 
 export const log = (l: string) => console.log(new Date().toISOString().slice(11, 19), l);
 

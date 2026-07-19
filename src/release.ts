@@ -1,5 +1,5 @@
 import { getProject, type Project } from './state.js';
-import { validateLive, defaultDeps } from './orchestrator.js';
+import { defaultDeps } from './orchestrator.js';
 import { tailAppLogs } from './aws.js';
 import { redeployProject, recordDeployedCommit } from './cicd.js';
 import { rollbackDeployment } from './ops.js';
@@ -50,6 +50,83 @@ export function countErrorLines(logText: string): number {
     .length;
 }
 
+export interface WatchResult {
+  ok: boolean;
+  detail: string;
+  probes: number;
+  blips: number;
+}
+
+/**
+ * Sustained canary watch. validateLive() answers "did it come up?" and stops
+ * at the first healthy response — right for a fresh deploy, WRONG for the
+ * health gate: a release that serves its first probe and dies two minutes
+ * later would slip through. This probes the URL for the WHOLE window:
+ *   - one failed probe is a blip (ALBs hiccup) — logged, tolerated;
+ *   - two CONSECUTIVE failures mean the release is genuinely not serving →
+ *     stop watching and report failure immediately (the caller reverts);
+ *   - if the window would end on a single fresh failure, probe up to twice
+ *     more instead of calling a release good on a red light.
+ */
+export async function watchRelease(
+  probe: () => Promise<number>,
+  seconds: number,
+  intervalMs = 10_000,
+  onLine?: (l: string) => void,
+): Promise<WatchResult> {
+  const planned = Math.max(3, Math.ceil((seconds * 1000) / intervalMs));
+  const gracesAllowed = 2;
+  let probes = 0;
+  let blips = 0;
+  let consecutive = 0;
+  let lastErr = '';
+
+  const probeOnce = async (): Promise<boolean> => {
+    probes++;
+    try {
+      const status = await probe();
+      if (status >= 200 && status < 400) return true;
+      lastErr = `HTTP ${status}`;
+    } catch (e) {
+      lastErr = `unreachable (${(e as Error).message})`;
+    }
+    return false;
+  };
+
+  let issued = 0;
+  while (issued < planned || (consecutive === 1 && issued < planned + gracesAllowed)) {
+    const healthy = await probeOnce();
+    issued++;
+    if (healthy) {
+      if (consecutive === 1) {
+        blips++;
+        onLine?.(`Blip at check ${probes} recovered — continuing the watch.`);
+      }
+      consecutive = 0;
+    } else {
+      consecutive++;
+      onLine?.(`Check ${probes}/${planned}: ${lastErr}.`);
+      if (consecutive >= 2) {
+        return {
+          ok: false,
+          probes,
+          blips,
+          detail: `${lastErr} on ${consecutive} consecutive checks (check ${probes} of ${planned} planned)`,
+        };
+      }
+    }
+    const more = issued < planned || consecutive === 1;
+    if (more) await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  const flaky = blips > 0 ? `, ${blips} blip(s) recovered` : '';
+  return {
+    ok: true,
+    probes,
+    blips,
+    detail: `healthy across ${probes} checks over ~${Math.round((probes * intervalMs) / 1000)}s${flaky}`,
+  };
+}
+
 export interface SafeDeployOptions {
   /** Run database migrations before the deploy (snapshot first). */
   migrate?: boolean;
@@ -91,10 +168,11 @@ export async function safeDeploy(name: string, opts: SafeDeployOptions, log: (l:
   steps.push(`Deploy: shipped to ${url}`);
 
   // 3. Health gate — watch it like a human would after pressing deploy.
+  // The deploy pipeline already verified the URL serves (validateLive); this
+  // gate's job is different: sustained observation of the fresh release.
   const watch = Math.max(30, opts.watchSeconds ?? 120);
-  const attempts = Math.ceil(watch / 10);
   log(`Watching ${url} for ${watch}s before calling this release good…`);
-  const live = await validateLive(url, defaultDeps, log, attempts, 10_000);
+  const live = await watchRelease(() => defaultDeps.healthFetch(url), watch, 10_000, log);
 
   let errorCount = 0;
   const fresh = getProject(name)!;

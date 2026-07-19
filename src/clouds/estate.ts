@@ -51,6 +51,23 @@ export interface GcpRunService {
   status?: { url?: string; conditions?: Array<{ type?: string; status?: string; message?: string }> };
 }
 
+/**
+ * Tidy `gcloud logging read --format=value(service,severity,payload)` output:
+ * an entry whose payload is still empty (fully structured, no message field)
+ * must say so rather than render as a blank ERROR row a human can't act on.
+ */
+export function formatGcpErrorLogLines(raw: string): string {
+  const lines = raw.split(/\r?\n/).map((l) => l.trimEnd()).filter((l) => l.trim());
+  if (lines.length === 0) return 'No error-level log lines in the last hour.';
+  return lines
+    .map((l) => {
+      const parts = l.split('\t');
+      if (parts.length >= 3 && parts.slice(2).join('\t').trim()) return l;
+      return [parts[0]?.trim() || '(unknown service)', parts[1]?.trim() || 'ERROR', '(structured entry with no text message — open Logs Explorer for the full payload)'].join('\t');
+    })
+    .join('\n');
+}
+
 export function gcpRunSection(services: GcpRunService[]): string {
   if (!services.length) return 'No Cloud Run services in this region.';
   const lines: string[] = [];
@@ -108,10 +125,12 @@ export async function scanGcpEstate(gcpProject: string, region: string): Promise
         'logging', 'read',
         'severity>=ERROR AND (resource.type="cloud_run_revision" OR resource.type="cloud_function")',
         '--project', gcpProject, '--freshness=1h', '--limit', '30',
-        '--format=value(resource.labels.service_name,severity,textPayload)', '--quiet',
+        // Many Cloud Run errors are structured (jsonPayload/httpRequest), not
+        // textPayload — firstof() keeps those from rendering as blank lines.
+        '--format=value(resource.labels.service_name,severity,firstof(textPayload,jsonPayload.message,httpRequest.requestUrl))', '--quiet',
       ], 60_000);
       if (res.code !== 0) throw new Error((res.stderr || res.stdout).trim().split(/\r?\n/).slice(-2).join(' '));
-      return res.stdout.trim() || 'No error-level log lines in the last hour.';
+      return formatGcpErrorLogLines(res.stdout);
     }),
   ]);
   return sections.map((s) => `### ${s.title}\n${s.body}`).join('\n\n');

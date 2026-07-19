@@ -24,7 +24,7 @@ Not a SaaS. There is no PLAINOPS server. Everything runs on localhost.
 npm install
 npm start            # dashboard at http://localhost:7717 (needs cloud creds + Anthropic key)
 npm run demo         # scripted UI walkthrough, no cloud and no API key needed
-npm test             # vitest — 29 files, 179 tests
+npm test             # vitest — 30 files, 210 tests
 npm run typecheck    # tsc --noEmit
 npm run validate:all-blueprints   # tofu validate × 9 (AWS/GCP/Azure)
 npm run build && npx electron .   # run the desktop shell from source

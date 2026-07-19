@@ -151,9 +151,11 @@ resource "azurerm_container_app" "main" {
     value = azurerm_container_registry.main.admin_password
   }
 
-  # App secrets are shells: placeholder values only. Real values are set later
-  # via `az containerapp secret set` by the host product — never through
-  # Terraform, so they never appear in plan output.
+  # App secrets are shells: placeholder values only, and PlainOps does not yet
+  # automate setting them on Azure (deploys currently pass app_secrets = []).
+  # When that lands it will go through the gated `az containerapp secret set`
+  # + a revision restart — never through Terraform, so values never appear in
+  # plan output. DATABASE_URL below is the exception: composed in-state only.
   dynamic "secret" {
     for_each = toset(var.app_secrets)
     content {

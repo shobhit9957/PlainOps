@@ -9,7 +9,30 @@ import {
   azurePostgresSection,
   azureAksSection,
   azureActivityFailuresSection,
+  formatGcpErrorLogLines,
 } from '../src/clouds/estate.js';
+
+describe('formatGcpErrorLogLines', () => {
+  it('keeps lines that carry a real message', () => {
+    const out = formatGcpErrorLogLines('po-shop-gateway\tERROR\tconnect ECONNREFUSED 10.1.2.3:5432\n');
+    expect(out).toBe('po-shop-gateway\tERROR\tconnect ECONNREFUSED 10.1.2.3:5432');
+  });
+
+  it('annotates structured entries instead of rendering blank ERROR rows', () => {
+    // This exact shape came out of a live estate scan: severity with no payload.
+    const out = formatGcpErrorLogLines('po-shop-gateway\tERROR\t\n\tERROR\t\n');
+    const lines = out.split('\n');
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain('po-shop-gateway');
+    expect(lines[0]).toContain('structured entry with no text message');
+    expect(lines[1]).toContain('(unknown service)');
+  });
+
+  it('reports an empty result honestly', () => {
+    expect(formatGcpErrorLogLines('')).toBe('No error-level log lines in the last hour.');
+    expect(formatGcpErrorLogLines('  \n \n')).toBe('No error-level log lines in the last hour.');
+  });
+});
 
 describe('GCP estate sections', () => {
   it('flags Cloud Run services that are not Ready, with the condition message', () => {

@@ -47,6 +47,25 @@ describe('renderProject', () => {
     }
   });
 
+  it('withDatabase GUARANTEES DATABASE_URL in the rendered app secrets (the contract the app docs promise)', async () => {
+    const { renderProject } = await import('../src/blueprint/render.js');
+    // A caller that forgets DATABASE_URL (only the propose_infrastructure tool
+    // used to add it) must still get a database-connected app — GCP/Azure
+    // blueprints hardwire this in HCL; AWS must honor it at render time.
+    const dir = renderProject({ ...params, projectName: 'dbapp', appSecrets: ['APP_TOKEN'] }, 'bkt');
+    const tfvars = JSON.parse(fs.readFileSync(path.join(dir, 'terraform.tfvars.json'), 'utf8'));
+    expect(tfvars.app_secrets).toContain('DATABASE_URL');
+    expect(tfvars.app_secrets).toContain('APP_TOKEN');
+
+    // Never duplicated, and never added without a database.
+    const dir2 = renderProject({ ...params, projectName: 'dbapp2' }, 'bkt');
+    const tf2 = JSON.parse(fs.readFileSync(path.join(dir2, 'terraform.tfvars.json'), 'utf8'));
+    expect(tf2.app_secrets.filter((s: string) => s === 'DATABASE_URL')).toHaveLength(1);
+    const dir3 = renderProject({ ...params, projectName: 'nodb', withDatabase: false, appSecrets: ['APP_TOKEN'] }, 'bkt');
+    const tf3 = JSON.parse(fs.readFileSync(path.join(dir3, 'terraform.tfvars.json'), 'utf8'));
+    expect(tf3.app_secrets).not.toContain('DATABASE_URL');
+  });
+
   it('buildspec pushes both the immutable and the live tag', () => {
     const main = fs.readFileSync(
       path.join(process.cwd(), 'src', 'blueprint', 'files', 'main.tf'),

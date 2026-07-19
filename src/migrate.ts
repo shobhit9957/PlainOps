@@ -145,6 +145,32 @@ export function describeRisks(reports: RiskReport[]): string {
 
 /* --------------------------------------------------------------- execution */
 
+/**
+ * node-postgres-based CLIs read the plain DATABASE_URL and get rejected by
+ * RDS PG15+'s default rds.force_ssl=1 — live signature: FATAL 28000 from
+ * ClientAuthentication ("no pg_hba.conf entry … no encryption"). The app
+ * itself connects fine because it sets ssl explicitly. PGSSLMODE=no-verify
+ * makes these tools connect over TLS the same way the app does (RDS-managed
+ * cert, no local CA needed). psycopg/libpq REJECT that value, so it is
+ * scoped to the tools that understand it.
+ */
+const PGSSLMODE_TOOLS = new Set(['node-pg-migrate', 'Knex', 'Sequelize', 'TypeORM']);
+
+export function migrationTaskOverrides(
+  containerName: string,
+  plan: MigrationPlan,
+): { containerOverrides: Array<{ name: string; command: string[]; environment?: Array<{ name: string; value: string }> }> } {
+  return {
+    containerOverrides: [
+      {
+        name: containerName,
+        command: ['sh', '-c', plan.command],
+        ...(PGSSLMODE_TOOLS.has(plan.tool) ? { environment: [{ name: 'PGSSLMODE', value: 'no-verify' }] } : {}),
+      },
+    ],
+  };
+}
+
 async function awsJson<T>(args: string[], region: string, timeoutMs = 60_000): Promise<T> {
   const res = await runAwsCli([...args, '--region', region, '--output', 'json'], timeoutMs);
   if (res.code !== 0) throw new Error((res.stderr || res.stdout).trim().split(/\r?\n/).slice(-3).join(' '));
@@ -185,9 +211,7 @@ export async function runMigrations(p: Project, plan: MigrationPlan, log: (l: st
   const containerName = td.taskDefinition.containerDefinitions[0]?.name;
   if (!containerName) throw new Error('Task definition has no container to run the migration in.');
 
-  const overrides = JSON.stringify({
-    containerOverrides: [{ name: containerName, command: ['sh', '-c', plan.command] }],
-  });
+  const overrides = JSON.stringify(migrationTaskOverrides(containerName, plan));
   const network = JSON.stringify({
     awsvpcConfiguration: { subnets: net.subnets, securityGroups: net.securityGroups, assignPublicIp: net.assignPublicIp ?? 'ENABLED' },
   });
