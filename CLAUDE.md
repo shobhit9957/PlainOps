@@ -119,7 +119,7 @@ Full detail: **[ARCHITECTURE.md](ARCHITECTURE.md)**. Security model:
 | **Serverless** | `deploy_serverless` | API Gateway HTTP API, 2 Lambdas, SQS + DLQ, DynamoDB, event source mapping |
 | **Microservices** | `deploy_microservices` | Shared ALB → gateway, Cloud Map private DNS, per-service ECR/CodeBuild/ECS/autoscaling, optional DocumentDB + ElastiCache Redis |
 
-### GCP / Azure deploy paths (new — validated, not yet live-proven)
+### GCP / Azure deploy paths (GCP live-proven on all 3 shapes; Azure validated, awaiting a real subscription)
 
 `deploy_gcp` / `deploy_azure` take `archetype: app | serverless | microservices` and run
 through `src/multicloud.ts`: preflight CLI+login → render blueprint → approval (cost on
