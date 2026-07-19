@@ -169,6 +169,32 @@ async function gcpApp(name: string, gcpProject: string, opts: CloudDeployOptions
   return await mustBeLive(outputs.app_url, log, deps);
 }
 
+/**
+ * Cloud Functions gen2 deploys create an underlying Cloud Run service + an
+ * Eventarc trigger that run AS the Compute Engine default service account, and
+ * GCP requires the DEPLOYING identity to have iam.serviceAccounts.actAs on that
+ * SA. `roles/owner` deliberately does NOT include actAs, so on a fresh project
+ * the deploy fails with a 403 ("Permission iam.serviceAccounts.actAs denied").
+ * Grant the deploying account serviceAccountUser on the compute SA (idempotent)
+ * so the first serverless deploy just works. Best-effort: if we can't read the
+ * account/number we let the deploy proceed and surface the real error.
+ */
+async function ensureDeployerActsAsComputeSa(gcpProject: string, log: (l: string) => void, deps: MultiCloudDeps): Promise<void> {
+  const acct = (await deps.runCli('gcp', ['config', 'get-value', 'account'], 15_000)).stdout.trim();
+  const numRes = await deps.runCli('gcp', ['projects', 'describe', gcpProject, '--format=value(projectNumber)'], 20_000);
+  const projectNumber = numRes.stdout.trim();
+  if (!acct || !projectNumber || acct === '(unset)') return;
+  const computeSa = `${projectNumber}-compute@developer.gserviceaccount.com`;
+  const res = await deps.runCli('gcp', [
+    'iam', 'service-accounts', 'add-iam-policy-binding', computeSa,
+    '--member', `user:${acct}`, '--role', 'roles/iam.serviceAccountUser',
+    '--project', gcpProject, '--quiet',
+  ], 40_000);
+  if (res.code === 0) log(`Granted your account permission to deploy functions as the runtime service account (one-time).`);
+  // A non-zero here (e.g. the member is a service account, not a user) is not
+  // fatal — the deploy proceeds and any real actAs error surfaces with its fix.
+}
+
 async function gcpServerless(name: string, gcpProject: string, opts: CloudDeployOptions, log: (l: string) => void, deps: MultiCloudDeps): Promise<string> {
   const project = requireProject(name);
   const source = opts.sourcePath ?? path.join(EXAMPLES_DIR, 'gcp-order-pipeline');
@@ -177,6 +203,7 @@ async function gcpServerless(name: string, gcpProject: string, opts: CloudDeploy
       throw new Error(`A GCP serverless deploy needs ${part}/index.js (exporting "handler") in ${source}.`);
     }
   }
+  await ensureDeployerActsAsComputeSa(gcpProject, log, deps).catch(() => {});
   log('Packaging your functions…');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'po-gcpfn-'));
   const apiZip = path.join(tmp, 'api.zip');
