@@ -74,6 +74,20 @@ per-cloud setup — including GCP's two-step login (CLI **and** Application Defa
 Credentials) that's easy to miss — is spelled out in **[CLOUD_SETUP.md](CLOUD_SETUP.md)**.
 OpenTofu auto-downloads on first use.
 
+### System requirements
+
+| Platform | Supported | Notes |
+|---|---|---|
+| Windows 10 / 11 (x64) | ✅ | Primary platform. Windows 11 on ARM runs the x64 build via built-in emulation. |
+| macOS 11+ (Apple Silicon & Intel) | ✅ | Both architectures built; CLIs found in Homebrew (`/opt/homebrew`, `/usr/local`) and official SDK locations even when the app is launched from Finder (GUI apps don't inherit your terminal's PATH — PlainOps probes the installer locations itself). |
+| Linux (x64/arm64) | From source | `npm start`; no packaged build yet. |
+| Windows 7 / 8 / 8.1 | ❌ | Not supported — Node 20 and Electron both require Windows 10+. |
+
+Every push runs the full test suite on Windows, macOS, and Linux
+(`.github/workflows/test-matrix.yml`), including a real per-OS OpenTofu
+download — so cross-platform breakage is caught in CI, not on a founder's
+machine.
+
 ## First five minutes
 
 1. Open PlainOps → pick a cloud → name a project (region is pre-picked per cloud).

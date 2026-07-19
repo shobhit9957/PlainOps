@@ -1,4 +1,5 @@
-import { execFile, spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { findBinary } from '../binfind.js';
 
 /**
  * Generic gcloud / az CLI runner, mirroring src/awscli.ts. Read-only commands
@@ -21,15 +22,11 @@ export function resolveCloudBin(cloud: CloudId): string {
   const override = envOverride(cloud);
   if (override) return (binCache[cloud] = override);
   const name = cloud === 'gcp' ? 'gcloud' : 'az';
-  const finder = process.platform === 'win32' ? 'where' : 'which';
-  const res = spawnSync(finder, [name], { encoding: 'utf8', shell: false });
-  if (res.status === 0 && res.stdout.trim()) {
-    // On Windows prefer the .cmd shim (gcloud/az are batch scripts there).
-    const lines = res.stdout.trim().split(/\r?\n/);
-    const cmd = lines.find((l) => /\.(cmd|bat)$/i.test(l)) ?? lines[0];
-    return (binCache[cloud] = cmd);
-  }
-  return (binCache[cloud] = name);
+  // PATH first, then the official installer locations — a GUI-launched app
+  // (Start menu / Finder) often runs with a PATH the founder's terminal
+  // doesn't have (Homebrew on macOS, freshly-installed SDKs on Windows).
+  const found = findBinary(name, { preferShim: true });
+  return (binCache[cloud] = found ?? name);
 }
 
 // Verbs that only read state. gcloud/az put the verb LAST among positionals

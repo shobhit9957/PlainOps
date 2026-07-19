@@ -1,8 +1,9 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
 import { binDir } from './config.js';
+import { findBinary } from './binfind.js';
 
 /** Pinned candidates, newest first. Any one that downloads wins. */
 const TOFU_VERSIONS = ['1.9.1', '1.9.0', '1.8.1'];
@@ -17,15 +18,6 @@ function platformAsset(version: string): { url: string; exe: string } {
     url: `https://github.com/opentofu/opentofu/releases/download/v${version}/tofu_${version}_${plat}_${arch}.zip`,
     exe,
   };
-}
-
-function findOnPath(cmd: string): string | null {
-  const finder = process.platform === 'win32' ? 'where' : 'which';
-  const res = spawnSync(finder, [cmd], { encoding: 'utf8', shell: false });
-  if (res.status === 0 && res.stdout.trim()) {
-    return res.stdout.trim().split(/\r?\n/)[0];
-  }
-  return null;
 }
 
 async function downloadTofu(): Promise<string> {
@@ -61,13 +53,14 @@ async function downloadTofu(): Promise<string> {
   );
 }
 
-/** Resolve the IaC binary: env override → PATH (tofu, terraform) → cached → download. */
+/** Resolve the IaC binary: env override → PATH + official install locations
+ * (tofu, terraform) → cached → download. */
 export async function resolveTofu(): Promise<string> {
   const override = process.env.PLAINOPS_TOFU_PATH;
   if (override && fs.existsSync(override)) return override;
 
-  for (const cmd of ['tofu', 'terraform']) {
-    const found = findOnPath(cmd);
+  for (const cmd of ['tofu', 'terraform'] as const) {
+    const found = findBinary(cmd);
     if (found) return found;
   }
 

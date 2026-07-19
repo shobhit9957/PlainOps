@@ -1,4 +1,5 @@
-import { execFile, spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { findBinary } from './binfind.js';
 
 /**
  * General AWS CLI runner. Lets PLAINOPS do anything in AWS beyond the built-in
@@ -12,14 +13,9 @@ let cachedBin: string | null = null;
 function resolveAwsBin(): string {
   if (cachedBin) return cachedBin;
   if (process.env.PLAINOPS_AWS_PATH) return (cachedBin = process.env.PLAINOPS_AWS_PATH);
-  const finder = process.platform === 'win32' ? 'where' : 'which';
-  const res = spawnSync(finder, ['aws'], { encoding: 'utf8', shell: false });
-  if (res.status === 0 && res.stdout.trim()) {
-    cachedBin = res.stdout.trim().split(/\r?\n/)[0];
-    return cachedBin;
-  }
-  // Fall back to the bare name and hope it's on PATH.
-  cachedBin = 'aws';
+  // PATH first, then the official installer locations (Program Files /
+  // Homebrew) — GUI-launched apps often run with a minimal PATH.
+  cachedBin = findBinary('aws') ?? 'aws';
   return cachedBin;
 }
 
