@@ -69,8 +69,10 @@ npm start          # dashboard at http://localhost:7717
 npm run demo       # scripted walkthrough — no cloud accounts or API key needed
 ```
 
-Prerequisites: Node 20+, plus the CLI of each cloud you want to use
-(`aws configure` · `gcloud init` · `az login`). OpenTofu auto-downloads on first use.
+Prerequisites: Node 20+, plus the CLI of each cloud you want to use. The one-time
+per-cloud setup — including GCP's two-step login (CLI **and** Application Default
+Credentials) that's easy to miss — is spelled out in **[CLOUD_SETUP.md](CLOUD_SETUP.md)**.
+OpenTofu auto-downloads on first use.
 
 ## First five minutes
 

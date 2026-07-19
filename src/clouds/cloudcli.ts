@@ -123,7 +123,10 @@ export function runCloudCli(cloud: CloudId, args: string[], timeoutMs = 120_000)
   const needsShell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(bin);
   return new Promise((resolve) => {
     execFile(
-      bin,
+      // Under a shell the file becomes the first token of the command line, so
+      // a binary path with spaces ("C:\Program Files (x86)\...\gcloud.cmd" —
+      // the default install location) must be quoted too, not just the args.
+      needsShell ? quoteForCmdShell(bin) : bin,
       needsShell ? args.map(quoteForCmdShell) : args,
       { timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024, shell: needsShell, windowsHide: true },
       (err, stdout, stderr) => {
@@ -169,6 +172,19 @@ async function detectGcp(): Promise<CloudConnection> {
   const acct = await runCloudCli('gcp', ['auth', 'list', '--filter=status:ACTIVE', '--format=value(account)'], 15_000);
   if (!acct.stdout.trim()) {
     return { installed: true, authenticated: false, detail: 'gcloud has no active login — run `gcloud auth login`.', target: project };
+  }
+  // OpenTofu's google provider authenticates with Application Default
+  // Credentials, NOT the gcloud CLI login — so `gcloud auth login` alone lets
+  // a deploy pass preflight and then fail at `tofu apply` with a credentials
+  // error. Verify ADC exists too, and name the exact fix if it doesn't.
+  const adc = await runCloudCli('gcp', ['auth', 'application-default', 'print-access-token'], 20_000);
+  if (adc.code !== 0) {
+    return {
+      installed: true,
+      authenticated: false,
+      detail: 'gcloud is logged in but Application Default Credentials are not set — deploys will fail. Run `gcloud auth application-default login` (this is what OpenTofu uses to deploy).',
+      target: project,
+    };
   }
   return { installed: true, authenticated: true, detail: `project ${project}`, target: project };
 }

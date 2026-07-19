@@ -74,4 +74,10 @@ describe('quoteForCmdShell (Windows .cmd shim safety)', () => {
     expect(quoteForCmdShell('')).toBe('""');
     expect(quoteForCmdShell('a "quoted" bit')).toBe('"a ""quoted"" bit"');
   });
+  it('quotes the DEFAULT install path (C:\\Program Files (x86)\\...) so a shelled .cmd runs', async () => {
+    const { quoteForCmdShell } = await import('../src/clouds/cloudcli.js');
+    // The real bug: unquoted, cmd reads "C:\Program" as the command and fails.
+    expect(quoteForCmdShell(String.raw`C:\Program Files (x86)\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd`))
+      .toBe(String.raw`"C:\Program Files (x86)\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd"`);
+  });
 });

@@ -23,6 +23,10 @@ You need three things:
 > You do **not** need OpenTofu/Terraform — PLAINOPS auto-downloads OpenTofu the
 > first time it deploys.
 
+> **Deploying to Google Cloud or Azure instead of (or as well as) AWS?** The
+> one-time CLI setup for each cloud — including the two-step GCP login people
+> miss — is in **[CLOUD_SETUP.md](CLOUD_SETUP.md)**.
+
 ## 1. Install and start
 
 ```bash
