@@ -39,7 +39,9 @@ async function tryItem(source: string, fn: () => Promise<string>): Promise<Evide
 }
 
 async function cloudRead(cloud: 'gcp' | 'azure', args: string[]): Promise<string> {
-  const res = await runCloudCli(cloud, args, 60_000);
+  // --quiet keeps gcloud from prompting (e.g. "enable API? (y/N)") which could
+  // hang on a TTY or pollute the evidence with prompt text.
+  const res = await runCloudCli(cloud, cloud === 'gcp' ? [...args, '--quiet'] : args, 60_000);
   if (res.code !== 0) throw new Error((res.stderr || res.stdout).trim().split(/\r?\n/).slice(-4).join(' '));
   return res.stdout;
 }

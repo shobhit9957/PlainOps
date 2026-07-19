@@ -32,7 +32,10 @@ async function trySection(title: string, fn: () => Promise<string>): Promise<Sec
 }
 
 async function cloudJson<T>(cloud: 'gcp' | 'azure', args: string[], fallback: T, timeoutMs = 60_000): Promise<T> {
-  const res = await runCloudCli(cloud, args, timeoutMs);
+  // --quiet stops gcloud from PROMPTING ("API not enabled — enable? (y/N)")
+  // which would otherwise pollute error text and, on a TTY, could hang.
+  const full = cloud === 'gcp' ? [...args, '--quiet'] : args;
+  const res = await runCloudCli(cloud, full, timeoutMs);
   if (res.code !== 0) throw new Error((res.stderr || res.stdout).trim().split(/\r?\n/).slice(-2).join(' '));
   try {
     return JSON.parse(res.stdout || 'null') ?? fallback;
@@ -105,7 +108,7 @@ export async function scanGcpEstate(gcpProject: string, region: string): Promise
         'logging', 'read',
         'severity>=ERROR AND (resource.type="cloud_run_revision" OR resource.type="cloud_function")',
         '--project', gcpProject, '--freshness=1h', '--limit', '30',
-        '--format=value(resource.labels.service_name,severity,textPayload)',
+        '--format=value(resource.labels.service_name,severity,textPayload)', '--quiet',
       ], 60_000);
       if (res.code !== 0) throw new Error((res.stderr || res.stdout).trim().split(/\r?\n/).slice(-2).join(' '));
       return res.stdout.trim() || 'No error-level log lines in the last hour.';
