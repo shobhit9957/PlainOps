@@ -1,32 +1,95 @@
-:root {
+/* ============================================================ tokens ==== */
+/* Every color flows through these variables. A theme is a [data-theme]
+   block that overrides them — nothing else in the file changes per theme. */
+
+:root,
+[data-theme="nebula"] {
   /* grounds */
-  --bg:      #0F1519;   /* page background — deep blue-slate */
-  --surface: #161E24;   /* cards, terminal chrome, panels */
-  --border:  #26333C;   /* hairlines, card borders */
+  --bg:      #0A0C18;
+  --surface: #111530;
+  --border:  #232948;
 
   /* text */
-  --text:    #E6EDEA;   /* primary text */
-  --muted:   #8FA3A6;   /* secondary text, labels */
+  --text:    #E8EAF6;
+  --muted:   #8B93B8;
 
   /* brand */
-  --jade:    #57C7A4;   /* buttons, links, success, "live" dots */
-  --amber:   #E5A84B;   /* approval states — signature */
-  --red:     #E06C5F;   /* destructive actions ONLY */
+  --jade:    #8B7CFF;   /* accent: buttons, links, success, "live" dots */
+  --amber:   #F0B35E;   /* approval states — the signature moment */
+  --red:     #F06C7A;   /* destructive actions ONLY */
+
+  /* gradients + glows */
+  --grad-a:  #8B7CFF;
+  --grad-b:  #22D3EE;
+  --glow-a:  rgba(139, 124, 255, .16);
+  --glow-b:  rgba(34, 211, 238, .10);
 
   /* extras */
-  --terminal-bg: #0B1013;              /* terminal body, darker than page */
-  --jade-tint:   rgba(87,199,164,.14); /* "live" pill background */
-  --amber-tint:  rgba(229,168,75,.14); /* "awaiting approval" pill background */
+  --on-accent:   #0B0824;
+  --terminal-bg: #070912;
+  --jade-tint:   color-mix(in srgb, var(--jade) 14%, transparent);
+  --amber-tint:  color-mix(in srgb, var(--amber) 14%, transparent);
+  --chip-azure:  #7FB4E8;
 
-  --radius: 10px;
+  --radius: 12px;
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+[data-theme="aurora"] {
+  --bg: #0A100E; --surface: #101915; --border: #21322A;
+  --text: #E4EFE9; --muted: #86A296;
+  --jade: #3ECF8E; --amber: #E8B44C; --red: #E36A5F;
+  --grad-a: #3ECF8E; --grad-b: #22D3EE;
+  --glow-a: rgba(62, 207, 142, .13); --glow-b: rgba(34, 211, 238, .09);
+  --on-accent: #06130C; --terminal-bg: #060B09;
+}
+
+[data-theme="sunset"] {
+  --bg: #140F0D; --surface: #1D1512; --border: #372A22;
+  --text: #F3EAE4; --muted: #B09A8C;
+  --jade: #FF8A4C; --amber: #FFC24B; --red: #FF6B6B;
+  --grad-a: #FF8A4C; --grad-b: #FF5C8A;
+  --glow-a: rgba(255, 138, 76, .13); --glow-b: rgba(255, 92, 138, .09);
+  --on-accent: #1C0E05; --terminal-bg: #0D0806;
+}
+
+[data-theme="cobalt"] {
+  --bg: #0A1122; --surface: #101A33; --border: #24334F;
+  --text: #E7EDF8; --muted: #8DA0C0;
+  --jade: #5B8CFF; --amber: #EDB35A; --red: #EF6E7E;
+  --grad-a: #5B8CFF; --grad-b: #9F6CFF;
+  --glow-a: rgba(91, 140, 255, .14); --glow-b: rgba(159, 108, 255, .10);
+  --on-accent: #071022; --terminal-bg: #060C1A;
+}
+
+[data-theme="synthwave"] {
+  --bg: #120D1D; --surface: #191230; --border: #322550;
+  --text: #F1E9FA; --muted: #A392C4;
+  --jade: #E45CFF; --amber: #FFD166; --red: #FF5D8F;
+  --grad-a: #E45CFF; --grad-b: #4CC9F0;
+  --glow-a: rgba(228, 92, 255, .14); --glow-b: rgba(76, 201, 240, .10);
+  --on-accent: #1B0426; --terminal-bg: #0B0716;
+}
+
+[data-theme="jade"] {
+  --bg: #0F1519; --surface: #161E24; --border: #26333C;
+  --text: #E6EDEA; --muted: #8FA3A6;
+  --jade: #57C7A4; --amber: #E5A84B; --red: #E06C5F;
+  --grad-a: #57C7A4; --grad-b: #3AA7C9;
+  --glow-a: rgba(87, 199, 164, .10); --glow-b: rgba(58, 167, 201, .07);
+  --on-accent: #08130F; --terminal-bg: #0B1013;
+  --radius: 10px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(1100px 700px at 8% -10%, var(--glow-a), transparent 60%),
+    radial-gradient(900px 650px at 104% 112%, var(--glow-b), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-sans);
   font-size: 14.5px;
@@ -35,6 +98,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: background-color .25s ease, color .25s ease;
 }
 
 /* ---------------------------------------------------------------- header */
@@ -45,16 +109,22 @@ header {
   gap: 14px;
   padding: 12px 20px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   flex-shrink: 0;
 }
 
 .brand { font-weight: 650; font-size: 16px; letter-spacing: .2px; }
 .brand-mark {
-  color: var(--jade);
   font-family: var(--font-mono);
   font-weight: 600;
   margin-right: 2px;
+  background: linear-gradient(120deg, var(--grad-a), var(--grad-b));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--jade); /* fallback */
 }
 
 .tabs { display: flex; gap: 4px; margin-left: 14px; }
@@ -66,9 +136,14 @@ header {
   padding: 5px 14px;
   border-radius: 8px;
   cursor: pointer;
+  transition: color .15s ease, background-color .15s ease, border-color .15s ease;
 }
 .tab:hover { color: var(--text); }
-.tab.active { color: var(--text); background: var(--bg); border-color: var(--border); }
+.tab.active {
+  color: var(--jade);
+  background: var(--jade-tint);
+  border-color: color-mix(in srgb, var(--jade) 35%, transparent);
+}
 
 .spacer { flex: 1; }
 
@@ -80,17 +155,26 @@ header {
   border-radius: 999px;
   padding: 3px 10px;
 }
-.cloud-badge { color: var(--jade); border-color: rgba(87,199,164,.35); text-transform: uppercase; }
+.cloud-badge {
+  color: var(--jade);
+  border-color: color-mix(in srgb, var(--jade) 35%, transparent);
+  text-transform: uppercase;
+}
 
 select, input {
-  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 7px 10px;
   font: inherit;
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
-select:focus, input:focus { outline: none; border-color: var(--jade); }
+select:focus, input:focus {
+  outline: none;
+  border-color: var(--jade);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--jade) 22%, transparent);
+}
 
 button { font: inherit; cursor: pointer; }
 button.ghost {
@@ -99,17 +183,26 @@ button.ghost {
   color: var(--muted);
   border-radius: 8px;
   padding: 6px 12px;
+  transition: color .15s ease, border-color .15s ease, transform .12s ease;
 }
 button.ghost:hover { color: var(--text); border-color: var(--jade); }
+
 button.primary, #chat-form button, #ob-start {
-  background: var(--jade);
-  color: #08130F;
+  background: linear-gradient(135deg, var(--grad-a), var(--grad-b));
+  color: var(--on-accent);
   font-weight: 650;
   border: none;
   border-radius: 8px;
   padding: 9px 18px;
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--jade) 30%, transparent);
+  transition: transform .12s ease, box-shadow .15s ease, filter .15s ease;
 }
-button.primary:hover, #chat-form button:hover, #ob-start:hover { filter: brightness(1.08); }
+button.primary:hover, #chat-form button:hover, #ob-start:hover {
+  filter: brightness(1.07);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--jade) 40%, transparent);
+}
+button.primary:active, #chat-form button:active, #ob-start:active { transform: translateY(0); }
 
 /* ------------------------------------------------------------------ main */
 
@@ -126,10 +219,15 @@ button.primary:hover, #chat-form button:hover, #ob-start:hover { filter: brightn
 .right { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 
 .card {
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .22);
+  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.card:hover {
+  border-color: color-mix(in srgb, var(--jade) 26%, var(--border));
 }
 .card h2 {
   font-size: 11.5px;
@@ -151,9 +249,9 @@ button.primary:hover, #chat-form button:hover, #ob-start:hover { filter: brightn
   border-radius: 6px;
   border: 1px solid var(--border);
 }
-.chip.aws { color: var(--amber); border-color: rgba(229,168,75,.35); }
-.chip.gcp { color: var(--jade); border-color: rgba(87,199,164,.35); }
-.chip.azure { color: #7FB4E8; border-color: rgba(127,180,232,.35); }
+.chip.aws { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 35%, transparent); }
+.chip.gcp { color: var(--jade); border-color: color-mix(in srgb, var(--jade) 35%, transparent); }
+.chip.azure { color: var(--chip-azure); border-color: color-mix(in srgb, var(--chip-azure) 35%, transparent); }
 
 .pill {
   font-size: 12px;
@@ -161,11 +259,12 @@ button.primary:hover, #chat-form button:hover, #ob-start:hover { filter: brightn
   padding: 3px 11px;
   border-radius: 999px;
 }
-.pill.gray { color: var(--muted); background: rgba(143,163,166,.12); }
+.pill.gray { color: var(--muted); background: color-mix(in srgb, var(--muted) 12%, transparent); }
 .pill.live { color: var(--jade); background: var(--jade-tint); }
-.pill.live::before { content: "● "; }
+.pill.live::before { content: "● "; animation: pulse 2.2s ease-in-out infinite; }
 .pill.waiting { color: var(--amber); background: var(--amber-tint); }
-.pill.destroyed { color: var(--red); background: rgba(224,108,95,.12); }
+.pill.destroyed { color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 
 .live-link {
   display: block;
@@ -193,7 +292,14 @@ button.primary:hover, #chat-form button:hover, #ob-start:hover { filter: brightn
 }
 #cost-lines li span:last-child { font-family: var(--font-mono); }
 .bars { display: flex; align-items: flex-end; gap: 4px; height: 54px; margin: 10px 0 6px; }
-.bar { flex: 1; background: var(--jade); opacity: .75; border-radius: 3px 3px 0 0; min-height: 3px; }
+.bar {
+  flex: 1;
+  background: linear-gradient(180deg, var(--grad-a), var(--grad-b));
+  opacity: .8;
+  border-radius: 3px 3px 0 0;
+  min-height: 3px;
+  transition: opacity .15s ease;
+}
 .bar:hover { opacity: 1; }
 .cost-note { color: var(--muted); font-size: 11.5px; margin-top: 8px; }
 
@@ -211,6 +317,7 @@ button.primary:hover, #chat-form button:hover, #ob-start:hover { filter: brightn
   border: 1px solid var(--amber);
   border-radius: var(--radius);
   padding: 14px 16px;
+  box-shadow: 0 6px 26px color-mix(in srgb, var(--amber) 18%, transparent);
 }
 .approval-tag {
   color: var(--amber);
@@ -222,20 +329,30 @@ button.primary:hover, #chat-form button:hover, #ob-start:hover { filter: brightn
 .approval-cost { color: var(--amber); font-family: var(--font-mono); font-size: 12.5px; margin-top: 6px; }
 .approval-actions { display: flex; gap: 8px; }
 button.approve {
-  background: var(--jade); color: #08130F;
+  background: linear-gradient(135deg, var(--grad-a), var(--grad-b));
+  color: var(--on-accent);
   border: none; border-radius: 8px; padding: 9px 20px; font-weight: 650;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--jade) 28%, transparent);
+  transition: transform .12s ease, filter .15s ease;
 }
+button.approve:hover { filter: brightness(1.07); transform: translateY(-1px); }
 button.reject {
   background: none; color: var(--red);
   border: 1px solid var(--red); border-radius: 8px; padding: 9px 16px;
+  transition: background-color .15s ease;
 }
+button.reject:hover { background: color-mix(in srgb, var(--red) 10%, transparent); }
 
 /* chat */
 .chat-card { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
 .chat { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
-.msg { max-width: 82%; padding: 9px 13px; border-radius: 10px; white-space: pre-wrap; word-break: break-word; }
-.msg.user { align-self: flex-end; background: rgba(87,199,164,.16); border: 1px solid rgba(87,199,164,.25); }
-.msg.assistant { align-self: flex-start; background: var(--bg); border: 1px solid var(--border); }
+.msg { max-width: 82%; padding: 9px 13px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
+.msg.user {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--jade) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--jade) 26%, transparent);
+}
+.msg.assistant { align-self: flex-start; background: color-mix(in srgb, var(--bg) 80%, transparent); border: 1px solid var(--border); }
 .msg.tool {
   align-self: flex-start;
   font-family: var(--font-mono); font-size: 12px;
@@ -277,7 +394,11 @@ button.reject {
   background: var(--red); color: #fff; font-size: 11px;
 }
 
-#chat-form { display: flex; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--border); background: var(--surface); }
+#chat-form {
+  display: flex; gap: 10px; padding: 12px 14px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+}
 #chat-form input { flex: 1; }
 .chat-card.drag { outline: 2px dashed var(--jade); outline-offset: -6px; }
 
@@ -287,14 +408,20 @@ button.reject {
 .portfolio-totals { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .total-tile {
   flex: 1; min-width: 130px;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 12px 14px;
 }
 .total-tile .t-label { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .6px; }
 .total-tile .t-value { font-family: var(--font-mono); font-size: 20px; font-weight: 600; margin-top: 4px; }
-.total-tile.grand .t-value { color: var(--jade); }
+.total-tile.grand { border-color: color-mix(in srgb, var(--jade) 40%, var(--border)); }
+.total-tile.grand .t-value {
+  background: linear-gradient(120deg, var(--grad-a), var(--grad-b));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
 
 table.portfolio { width: 100%; border-collapse: collapse; }
 .portfolio th {
@@ -310,7 +437,9 @@ table.portfolio { width: 100%; border-collapse: collapse; }
 
 .overlay {
   position: fixed; inset: 0;
-  background: rgba(11,16,19,.78);
+  background: rgba(0, 0, 0, .58);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
   display: flex; align-items: center; justify-content: center;
   z-index: 50;
   overflow-y: auto;
@@ -318,11 +447,12 @@ table.portfolio { width: 100%; border-collapse: collapse; }
 .overlay-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 28px;
   width: min(560px, 92vw);
   max-height: 92vh;
   overflow-y: auto;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .45), 0 0 0 1px color-mix(in srgb, var(--jade) 8%, transparent);
 }
 .overlay-card.small { width: min(420px, 92vw); }
 .overlay-card h1 { font-size: 21px; margin-bottom: 8px; }
@@ -347,12 +477,13 @@ table.portfolio { width: 100%; border-collapse: collapse; }
 .cloud-picker { display: flex; gap: 10px; margin-bottom: 8px; }
 .cloud-opt {
   flex: 1;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 8px;
   color: var(--text);
   display: flex; flex-direction: column; gap: 4px; align-items: center;
+  transition: border-color .15s ease, background-color .15s ease;
 }
 .cloud-opt .cloud-name { font-weight: 650; font-size: 13.5px; }
 .cloud-opt .cloud-state { font-size: 11px; color: var(--muted); }
@@ -373,7 +504,7 @@ table.portfolio { width: 100%; border-collapse: collapse; }
 
 .error {
   color: var(--red);
-  background: rgba(224,108,95,.12);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
   border: 1px solid var(--red);
   border-radius: 8px;
   padding: 9px 12px;
@@ -385,4 +516,5 @@ table.portfolio { width: 100%; border-collapse: collapse; }
 
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--jade) 40%, var(--border)); }
 ::-webkit-scrollbar-track { background: transparent; }

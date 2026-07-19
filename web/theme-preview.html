@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PlainOps — theme gallery</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;650&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      /* Gallery layout only — every color inside a tile comes from the REAL
+         theme tokens in styles.css, so this page never lies. */
+      html, body { height: auto !important; overflow: auto !important; }
+      body { display: block !important; background: #05060B !important; padding: 26px; }
+      .gallery-title { color: #E8EAF6; font-size: 22px; font-weight: 650; margin-bottom: 4px; }
+      .gallery-sub { color: #8B93B8; font-size: 13px; margin-bottom: 22px; }
+      .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(430px, 1fr)); gap: 20px; }
+      .scene {
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        background:
+          radial-gradient(560px 340px at 8% -10%, var(--glow-a), transparent 60%),
+          radial-gradient(460px 320px at 104% 112%, var(--glow-b), transparent 60%),
+          var(--bg);
+        color: var(--text);
+        font-family: var(--font-sans);
+        font-size: 13px;
+      }
+      .scene .mini-header {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        background: color-mix(in srgb, var(--surface) 72%, transparent);
+      }
+      .scene .theme-name {
+        margin-left: auto;
+        font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
+        letter-spacing: 1px; color: var(--muted);
+      }
+      .scene .body { display: flex; gap: 12px; padding: 14px; }
+      .scene .col-l { width: 175px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+      .scene .col-r { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+      .scene .card { padding: 12px; box-shadow: none; }
+      .scene .card h2 { margin-bottom: 8px; }
+      .scene .approval { padding: 10px 12px; gap: 10px; }
+      .scene .approval strong { font-size: 12.5px; }
+      .scene .chat-mock { display: flex; flex-direction: column; gap: 7px; padding: 12px; }
+      .scene .msg { font-size: 12px; padding: 7px 10px; }
+      .scene .term {
+        background: var(--terminal-bg);
+        border-top: 1px solid var(--border);
+        font-family: var(--font-mono); font-size: 10.5px;
+        color: var(--muted);
+        padding: 8px 12px; line-height: 1.7;
+      }
+      .scene .term .ok { color: var(--jade); }
+      .scene .bars { height: 34px; margin: 6px 0 0; }
+      .scene .btn-row { display: flex; gap: 8px; padding: 0 14px 14px; }
+      .scene button { pointer-events: none; }
+      .badge-row { display: flex; gap: 6px; }
+    </style>
+  </head>
+  <body>
+    <div class="gallery-title"><span style="font-family:var(--font-mono)">&gt;_</span> PlainOps theme gallery</div>
+    <div class="gallery-sub">Every tile is rendered from the real product tokens in styles.css — what you see here is exactly what the dashboard wears. Pick in the app: header → theme dropdown.</div>
+    <div class="gallery" id="gallery"></div>
+
+    <template id="scene-template">
+      <div class="scene">
+        <div class="mini-header">
+          <div class="brand"><span class="brand-mark">&gt;_</span> PlainOps</div>
+          <span class="tab active" style="padding:3px 10px">Deploy</span>
+          <span class="theme-name"></span>
+        </div>
+        <div class="body">
+          <div class="col-l">
+            <div class="card">
+              <h2>Project</h2>
+              <div class="proj-row"><span class="proj-label">Cloud</span><span class="chip aws">aws</span></div>
+              <div class="proj-row"><span class="proj-label">Status</span><span class="pill live">live</span></div>
+              <div class="proj-row"><span class="proj-label">Staging</span><span class="pill waiting">approval</span></div>
+              <a class="live-link" href="#">https://acme-store.example.app</a>
+            </div>
+            <div class="card">
+              <h2>Cost — 14 days</h2>
+              <div class="cost-row big"><span>$38.20</span><span>/mo</span></div>
+              <div class="bars">
+                <div class="bar" style="height:30%"></div><div class="bar" style="height:45%"></div>
+                <div class="bar" style="height:38%"></div><div class="bar" style="height:62%"></div>
+                <div class="bar" style="height:55%"></div><div class="bar" style="height:80%"></div>
+                <div class="bar" style="height:70%"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-r">
+            <div class="approval">
+              <div class="approval-body">
+                <div class="approval-tag">Awaiting your approval</div>
+                <strong>Deploy acme-store to production (~$38/mo)</strong>
+              </div>
+              <div class="approval-actions">
+                <button class="approve">Approve</button>
+                <button class="reject">Reject</button>
+              </div>
+            </div>
+            <div class="card chat-mock">
+              <div class="msg user">Deploy my store with a database</div>
+              <div class="msg assistant">Analyzed the repo — Node + Postgres. Here's the plan and the monthly cost before anything is created.</div>
+            </div>
+            <div class="term">
+              <div>$ tofu apply · 31 resources</div>
+              <div class="ok">✓ https://acme-store… → HTTP 200 — verified live</div>
+            </div>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="primary">Deploy</button>
+          <button class="ghost">Run diagnosis</button>
+        </div>
+      </div>
+    </template>
+
+    <script>
+      const THEMES = [
+        ['nebula', 'Nebula — default'],
+        ['aurora', 'Aurora'],
+        ['sunset', 'Sunset'],
+        ['cobalt', 'Cobalt'],
+        ['synthwave', 'Synthwave'],
+        ['jade', 'Classic Jade'],
+      ];
+      const gallery = document.getElementById('gallery');
+      const tpl = document.getElementById('scene-template');
+      for (const [id, label] of THEMES) {
+        const node = tpl.content.cloneNode(true);
+        const scene = node.querySelector('.scene');
+        scene.dataset.theme = id;
+        node.querySelector('.theme-name').textContent = label;
+        gallery.appendChild(node);
+      }
+    </script>
+  </body>
+</html>

@@ -3,6 +3,22 @@
 const $ = (id) => document.getElementById(id);
 const state = { projects: [], current: null, demo: false, clouds: null };
 
+// ------------------------------------------------------------------ theme
+const THEMES = ['nebula', 'aurora', 'sunset', 'cobalt', 'synthwave', 'jade'];
+(() => {
+  const saved = localStorage.getItem('plainops-theme');
+  const theme = THEMES.includes(saved) ? saved : 'nebula';
+  document.body.dataset.theme = theme;
+  const sel = $('theme-select');
+  if (sel) {
+    sel.value = theme;
+    sel.addEventListener('change', () => {
+      document.body.dataset.theme = sel.value;
+      localStorage.setItem('plainops-theme', sel.value);
+    });
+  }
+})();
+
 const REGIONS = {
   aws: [
     ['ap-south-1', 'ap-south-1 (Mumbai)'],

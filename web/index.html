@@ -9,7 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;650&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
+  <body data-theme="nebula">
     <header>
       <div class="brand"><span class="brand-mark">&gt;_</span> PlainOps</div>
       <nav class="tabs" id="tabs">
@@ -17,6 +17,14 @@
         <button class="tab" data-tab="costs">Costs</button>
       </nav>
       <div class="spacer"></div>
+      <select id="theme-select" title="Theme">
+        <option value="nebula">Nebula</option>
+        <option value="aurora">Aurora</option>
+        <option value="sunset">Sunset</option>
+        <option value="cobalt">Cobalt</option>
+        <option value="synthwave">Synthwave</option>
+        <option value="jade">Classic Jade</option>
+      </select>
       <select id="project-select" title="Project"></select>
       <span id="cloud-badge" class="badge cloud-badge">aws</span>
       <span id="region-badge" class="badge">—</span>
