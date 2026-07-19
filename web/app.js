@@ -4,10 +4,10 @@ const $ = (id) => document.getElementById(id);
 const state = { projects: [], current: null, demo: false, clouds: null };
 
 // ------------------------------------------------------------------ theme
-const THEMES = ['nebula', 'aurora', 'sunset', 'cobalt', 'synthwave', 'jade'];
+const THEMES = ['paper', 'ink', 'nebula', 'aurora', 'sunset', 'cobalt', 'synthwave', 'jade'];
 (() => {
   const saved = localStorage.getItem('plainops-theme');
-  const theme = THEMES.includes(saved) ? saved : 'nebula';
+  const theme = THEMES.includes(saved) ? saved : 'paper';
   document.body.dataset.theme = theme;
   const sel = $('theme-select');
   if (sel) {

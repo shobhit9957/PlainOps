@@ -34,6 +34,60 @@
   --radius: 12px;
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-display: var(--font-sans);
+
+  /* semantic + surface tuning (themes override) */
+  --success: var(--jade);
+  --terminal-fg: var(--muted);
+  --card-shadow: 0 10px 30px rgba(0, 0, 0, .22);
+  --btn-shadow: 0 4px 18px color-mix(in srgb, var(--jade) 30%, transparent);
+  --btn-shadow-hover: 0 6px 24px color-mix(in srgb, var(--jade) 40%, transparent);
+  --overlay-bg: rgba(0, 0, 0, .58);
+}
+
+/* ------------------------------------------------ the Press pair -------- */
+/* Editorial warm-paper language (the 2026 look: type does the talking,
+   flat surfaces, hairlines, ONE earthy accent, no gradients, no glow).
+   The terminal stays a true ink-dark window on the page. */
+
+[data-theme="paper"] {
+  --bg: #F2F0E7; --surface: #FBFAF5; --border: #DFD9C7;
+  --text: #21201B; --muted: #716C5E;
+  --jade: #BF5A3C;   /* clay — actions and links */
+  --amber: #A8752D;  /* ochre — the approval signature, ink-legible */
+  --red: #B3432B;
+  --grad-a: #BF5A3C; --grad-b: #BF5A3C;   /* flat: gradients collapse */
+  --glow-a: transparent; --glow-b: transparent;
+  --on-accent: #FFF9F2;
+  --terminal-bg: #191713; --terminal-fg: #C9C2AD;
+  --success: #4E7A63;  /* sage — live/ok */
+  --chip-azure: #3E6B96;
+  --card-shadow: 0 1px 2px rgba(60, 50, 30, .05), 0 10px 28px rgba(60, 50, 30, .06);
+  --btn-shadow: none;
+  --btn-shadow-hover: 0 2px 12px rgba(191, 90, 60, .30);
+  --overlay-bg: rgba(42, 38, 28, .45);
+  --font-display: "Fraunces", Georgia, serif;
+  --radius: 10px;
+}
+
+[data-theme="ink"] {
+  --bg: #1C1B17; --surface: #262419; --border: #3B382C;
+  --text: #EDE9DC; --muted: #A29B87;
+  --jade: #D97757;   /* warm coral-clay on dark */
+  --amber: #D9A03F;
+  --red: #E06A4B;
+  --grad-a: #D97757; --grad-b: #D97757;
+  --glow-a: transparent; --glow-b: transparent;
+  --on-accent: #FFF6EF;
+  --terminal-bg: #12110D; --terminal-fg: #A29B87;
+  --success: #7FA98F;
+  --chip-azure: #86A8C8;
+  --card-shadow: 0 1px 0 rgba(0, 0, 0, .25);
+  --btn-shadow: none;
+  --btn-shadow-hover: 0 2px 12px rgba(217, 119, 87, .25);
+  --overlay-bg: rgba(0, 0, 0, .55);
+  --font-display: "Fraunces", Georgia, serif;
+  --radius: 10px;
 }
 
 [data-theme="aurora"] {
@@ -115,7 +169,7 @@ header {
   flex-shrink: 0;
 }
 
-.brand { font-weight: 650; font-size: 16px; letter-spacing: .2px; }
+.brand { font-family: var(--font-display); font-weight: 650; font-size: 16.5px; letter-spacing: .2px; }
 .brand-mark {
   font-family: var(--font-mono);
   font-weight: 600;
@@ -194,13 +248,13 @@ button.primary, #chat-form button, #ob-start {
   border: none;
   border-radius: 8px;
   padding: 9px 18px;
-  box-shadow: 0 4px 18px color-mix(in srgb, var(--jade) 30%, transparent);
+  box-shadow: var(--btn-shadow);
   transition: transform .12s ease, box-shadow .15s ease, filter .15s ease;
 }
 button.primary:hover, #chat-form button:hover, #ob-start:hover {
   filter: brightness(1.07);
   transform: translateY(-1px);
-  box-shadow: 0 6px 24px color-mix(in srgb, var(--jade) 40%, transparent);
+  box-shadow: var(--btn-shadow-hover);
 }
 button.primary:active, #chat-form button:active, #ob-start:active { transform: translateY(0); }
 
@@ -223,7 +277,7 @@ button.primary:active, #chat-form button:active, #ob-start:active { transform: t
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .22);
+  box-shadow: var(--card-shadow);
   transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
 }
 .card:hover {
@@ -260,7 +314,7 @@ button.primary:active, #chat-form button:active, #ob-start:active { transform: t
   border-radius: 999px;
 }
 .pill.gray { color: var(--muted); background: color-mix(in srgb, var(--muted) 12%, transparent); }
-.pill.live { color: var(--jade); background: var(--jade-tint); }
+.pill.live { color: var(--success); background: color-mix(in srgb, var(--success) 13%, transparent); }
 .pill.live::before { content: "● "; animation: pulse 2.2s ease-in-out infinite; }
 .pill.waiting { color: var(--amber); background: var(--amber-tint); }
 .pill.destroyed { color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); }
@@ -364,7 +418,7 @@ button.reject:hover { background: color-mix(in srgb, var(--red) 10%, transparent
   background: var(--terminal-bg);
   border-top: 1px solid var(--border);
   font-family: var(--font-mono); font-size: 11.8px;
-  color: var(--muted);
+  color: var(--terminal-fg);
   padding: 10px 14px;
 }
 .build-log div { white-space: pre-wrap; word-break: break-all; }
@@ -437,7 +491,7 @@ table.portfolio { width: 100%; border-collapse: collapse; }
 
 .overlay {
   position: fixed; inset: 0;
-  background: rgba(0, 0, 0, .58);
+  background: var(--overlay-bg);
   backdrop-filter: blur(7px);
   -webkit-backdrop-filter: blur(7px);
   display: flex; align-items: center; justify-content: center;
@@ -455,8 +509,8 @@ table.portfolio { width: 100%; border-collapse: collapse; }
   box-shadow: 0 24px 70px rgba(0, 0, 0, .45), 0 0 0 1px color-mix(in srgb, var(--jade) 8%, transparent);
 }
 .overlay-card.small { width: min(420px, 92vw); }
-.overlay-card h1 { font-size: 21px; margin-bottom: 8px; }
-.overlay-card h2 { font-size: 17px; margin-bottom: 10px; }
+.overlay-card h1 { font-family: var(--font-display); font-size: 22px; margin-bottom: 8px; }
+.overlay-card h2 { font-family: var(--font-display); font-size: 17.5px; margin-bottom: 10px; }
 .overlay-card p { color: var(--muted); margin-bottom: 16px; }
 .overlay-card p b { color: var(--text); }
 .overlay-card code {
@@ -488,7 +542,7 @@ table.portfolio { width: 100%; border-collapse: collapse; }
 .cloud-opt .cloud-name { font-weight: 650; font-size: 13.5px; }
 .cloud-opt .cloud-state { font-size: 11px; color: var(--muted); }
 .cloud-opt.active { border-color: var(--jade); background: var(--jade-tint); }
-.cloud-opt .cloud-state.ok { color: var(--jade); }
+.cloud-opt .cloud-state.ok { color: var(--success); }
 .cloud-opt .cloud-state.missing { color: var(--amber); }
 .cloud-hint { color: var(--amber); font-size: 12.5px; min-height: 18px; margin-bottom: 10px; }
 
@@ -499,7 +553,7 @@ table.portfolio { width: 100%; border-collapse: collapse; }
   line-height: 1.8;
   margin-bottom: 8px;
 }
-.connector-status .ok { color: var(--jade); }
+.connector-status .ok { color: var(--success); }
 .connector-status .missing { color: var(--amber); }
 
 .error {
