@@ -130,7 +130,7 @@ machine.
 ## Develop
 
 ```bash
-npm test                     # vitest — 38 files, 257 tests
+npm test                     # vitest — 37 files, 257 tests
 npm run typecheck
 npm run validate:all-blueprints   # tofu-validates all 9 blueprints
 npm run build                # compile + assets for the desktop shell

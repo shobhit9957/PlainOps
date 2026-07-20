@@ -300,6 +300,7 @@ function connectEvents() {
       case 'action.pending': showApproval(e.action); addActivity('Approval requested: ' + e.action.type); break;
       case 'action.update': hideApproval(); addActivity('Action ' + e.verdict); break;
       case 'deploy.log': addBuildLog(e.line); break;
+      case 'chat.usermsg': addMsg('user', e.text); break;
       case 'secret.request': openSecretModal(e); break;
       case 'followup.scheduled': addActivity('⏰ Follow-up queued: ' + e.task.slice(0, 80)); break;
       case 'followup.fired': addMsg('tool', '⏰ Running a scheduled follow-up: ' + e.task.slice(0, 120)); addActivity('Follow-up running'); break;
