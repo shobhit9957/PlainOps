@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PlainOps</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;650&family=IBM+Plex+Mono:wght@400;600&family=Fraunces:opsz,wght@9..144,500;9..144,650&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body data-theme="fern">
+    <header>
+      <div class="brand"><span class="brand-mark">&gt;_</span> PlainOps</div>
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-tab="deploy">Deploy</button>
+        <button class="tab" data-tab="costs">Costs</button>
+      </nav>
+      <div class="spacer"></div>
+      <button id="mode-toggle" class="ghost mode-toggle" title="Switch light / dark">&#9789;</button>
+      <select id="theme-select" title="Theme">
+        <option value="fern">Fern · Green light</option>
+        <option value="pine">Pine · Green dark</option>
+        <option value="paper">Paper</option>
+        <option value="ink">Ink</option>
+        <option value="nebula">Nebula</option>
+        <option value="aurora">Aurora</option>
+        <option value="sunset">Sunset</option>
+        <option value="cobalt">Cobalt</option>
+        <option value="synthwave">Synthwave</option>
+        <option value="jade">Classic Jade</option>
+      </select>
+      <select id="project-select" title="Project"></select>
+      <span id="cloud-badge" class="badge cloud-badge">aws</span>
+      <span id="region-badge" class="badge">—</span>
+      <button id="settings-btn" class="ghost" title="Settings">⚙</button>
+    </header>
+
+    <main id="tab-deploy" class="tab-panel">
+      <section class="left">
+        <div class="card" id="project-card">
+          <h2>Project</h2>
+          <div class="proj-row"><span class="proj-label">Cloud</span><span id="proj-cloud" class="chip">—</span></div>
+          <div class="proj-row"><span class="proj-label">Shape</span><span id="proj-shape">—</span></div>
+          <div class="proj-row"><span class="proj-label">Status</span><span id="proj-status" class="pill gray">new</span></div>
+          <a id="live-link" class="live-link hidden" target="_blank" rel="noopener"></a>
+          <button id="diagnose-btn" class="ghost small-btn" title="Collect logs, service state and probe the URL, then explain what's wrong">⚕ Run diagnosis</button>
+        </div>
+
+        <div class="card" id="costs-card">
+          <h2>This project's cost</h2>
+          <div id="cost-estimate" class="cost-block hidden">
+            <div class="cost-row big"><span>Estimated</span><span id="cost-monthly">—</span></div>
+            <div class="cost-sub"><span id="cost-daily">—</span> / day · <span id="cost-yearly">—</span> / year</div>
+            <ul id="cost-lines"></ul>
+          </div>
+          <div id="cost-actual">
+            <div class="cost-row"><span>Actual (14 days)</span><span id="cost-total">—</span></div>
+            <div id="cost-bars" class="bars"></div>
+            <div class="cost-note" id="cost-actual-note">AWS billing can lag ~24 hours.</div>
+          </div>
+        </div>
+
+        <div class="card" id="activity-card">
+          <h2>Activity</h2>
+          <ul id="activity"></ul>
+        </div>
+      </section>
+
+      <section class="right">
+        <div id="approval-banner" class="approval hidden">
+          <div class="approval-body">
+            <div class="approval-tag">Awaiting your approval</div>
+            <strong id="approval-summary"></strong>
+            <div id="approval-cost" class="approval-cost"></div>
+          </div>
+          <div class="approval-actions">
+            <button id="approve-btn" class="approve">Approve</button>
+            <button id="reject-btn" class="reject">Reject</button>
+          </div>
+        </div>
+
+        <div class="card chat-card">
+          <div id="chat" class="chat"></div>
+          <div id="build-log" class="build-log hidden"></div>
+          <div id="busy-indicator" class="busy-indicator hidden"><span class="spinner"></span> Working… deploying / running your request</div>
+          <div id="image-tray" class="image-tray hidden"></div>
+          <form id="chat-form">
+            <input id="chat-input" placeholder="Say what to deploy, ask anything — or paste an architecture diagram and I'll build it…" autocomplete="off" />
+            <button type="submit">Send</button>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <main id="tab-costs" class="tab-panel hidden">
+      <section class="costs-page">
+        <div class="card">
+          <h2>Monthly estimate — everything PlainOps runs for you</h2>
+          <div class="portfolio-totals" id="portfolio-totals"></div>
+          <table class="portfolio" id="portfolio-table">
+            <thead>
+              <tr><th>Project</th><th>Cloud</th><th>Shape</th><th>Status</th><th class="num">Est. / month</th></tr>
+            </thead>
+            <tbody id="portfolio-body"></tbody>
+          </table>
+          <div class="cost-note">Estimates ±15–20% from published on-demand prices. AWS actuals appear on each project's Deploy tab; GCP/Azure billing exports aren't wired yet — ask in chat for a live billing lookup.</div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Onboarding overlay -->
+    <div id="onboarding" class="overlay hidden">
+      <div class="overlay-card">
+        <h1><span class="brand-mark">&gt;_</span> Welcome to PlainOps</h1>
+        <p>Type English, deploy to <b>your own cloud</b>. Everything runs on this machine — your credentials never leave it.</p>
+        <div class="cloud-picker" id="cloud-picker">
+          <button class="cloud-opt active" data-cloud="aws"><span class="cloud-name">AWS</span><span class="cloud-state" data-for="aws">checking…</span></button>
+          <button class="cloud-opt" data-cloud="gcp"><span class="cloud-name">Google Cloud</span><span class="cloud-state" data-for="gcp">checking…</span></button>
+          <button class="cloud-opt" data-cloud="azure"><span class="cloud-name">Azure</span><span class="cloud-state" data-for="azure">checking…</span></button>
+        </div>
+        <div id="cloud-hint" class="cloud-hint"></div>
+        <div class="field">
+          <label>Anthropic API key <small>(stored locally, powers the AI)</small></label>
+          <input id="ob-key" type="password" placeholder="sk-ant-…" />
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Project name <small>(lowercase, e.g. my-app)</small></label>
+            <input id="ob-name" placeholder="my-app" />
+          </div>
+          <div class="field">
+            <label>Region</label>
+            <select id="ob-region"></select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Path to your code <small>(optional — skip to just ask questions)</small></label>
+          <input id="ob-path" placeholder="(optional) C:\Users\you\code\my-app" />
+        </div>
+        <div id="ob-error" class="error hidden"></div>
+        <button id="ob-start" class="primary">Start deploying</button>
+      </div>
+    </div>
+
+    <!-- Secret modal -->
+    <div id="secret-modal" class="overlay hidden">
+      <div class="overlay-card small">
+        <h2>🔒 Add a secret</h2>
+        <p>Enter the value for <code id="secret-name"></code>. It stays on this machine and goes straight to your cloud's secret store — the AI only ever sees <code id="secret-placeholder"></code>.</p>
+        <input id="secret-value" type="password" placeholder="Paste the secret value" />
+        <button id="secret-save" class="primary">Store securely</button>
+      </div>
+    </div>
+
+    <!-- Settings modal -->
+    <div id="settings-modal" class="overlay hidden">
+      <div class="overlay-card small">
+        <h2>Settings</h2>
+        <div class="field">
+          <label>Anthropic API key</label>
+          <input id="set-key" type="password" placeholder="sk-ant-… (leave blank to keep)" />
+        </div>
+        <div class="field">
+          <label>Model</label>
+          <input id="set-model" placeholder="claude-opus-4-8" />
+        </div>
+        <div class="field">
+          <label>Connectors <small>(status refreshes when you open Settings)</small></label>
+          <div id="connector-status" class="connector-status">checking…</div>
+          <input id="conn-github" type="password" placeholder="GitHub personal access token (stored in the encrypted vault)" />
+          <input id="conn-slack" type="password" placeholder="Slack incoming-webhook URL (developer notifications)" style="margin-top:8px" />
+          <input id="conn-discord" type="password" placeholder="Discord webhook URL" style="margin-top:8px" />
+          <input id="conn-webhook" type="password" placeholder="Generic webhook URL (POST JSON)" style="margin-top:8px" />
+        </div>
+        <div class="field">
+          <label>New project <small>(add another app / another cloud)</small></label>
+          <div class="grid-2">
+            <input id="set-newname" placeholder="another-app" />
+            <select id="set-newcloud">
+              <option value="aws">AWS</option>
+              <option value="gcp">Google Cloud</option>
+              <option value="azure">Azure</option>
+            </select>
+          </div>
+          <button id="set-newproject" class="ghost">Create project</button>
+        </div>
+        <button id="set-save" class="primary">Save</button>
+        <button id="set-close" class="ghost">Close</button>
+      </div>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

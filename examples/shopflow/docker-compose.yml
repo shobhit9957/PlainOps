@@ -1,0 +1,57 @@
+# Run the whole 7-microservice store locally:  docker compose up --build
+# Then open http://localhost:8080
+services:
+  mongo:
+    image: mongo:7
+    ports: ["27017:27017"]
+    volumes: ["shopflow_data:/data/db"]
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  users:
+    build: ./users
+    environment: { MONGODB_URI: "mongodb://mongo:27017/shopflow", PORT: "3001" }
+    depends_on: [mongo]
+
+  products:
+    build: ./products
+    environment: { MONGODB_URI: "mongodb://mongo:27017/shopflow", PORT: "3002", REDIS_URL: "redis://redis:6379" }
+    depends_on: [mongo, redis]
+
+  cart:
+    build: ./cart
+    environment: { MONGODB_URI: "mongodb://mongo:27017/shopflow", PORT: "3003" }
+    depends_on: [mongo]
+
+  orders:
+    build: ./orders
+    environment:
+      MONGODB_URI: "mongodb://mongo:27017/shopflow"
+      PORT: "3004"
+      PAYMENTS_URL: "http://payments:3005"
+      NOTIFICATIONS_URL: "http://notifications:3006"
+    depends_on: [mongo, payments, notifications]
+
+  payments:
+    build: ./payments
+    environment: { PORT: "3005" }
+
+  notifications:
+    build: ./notifications
+    environment: { PORT: "3006" }
+
+  gateway:
+    build: ./gateway
+    ports: ["8080:8080"]
+    environment:
+      PORT: "8080"
+      USERS_URL: "http://users:3001"
+      PRODUCTS_URL: "http://products:3002"
+      CART_URL: "http://cart:3003"
+      ORDERS_URL: "http://orders:3004"
+    depends_on: [users, products, cart, orders]
+
+volumes:
+  shopflow_data:

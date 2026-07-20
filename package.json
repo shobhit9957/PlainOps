@@ -1,0 +1,106 @@
+{
+  "name": "plainops",
+  "version": "1.1.0",
+  "description": "PlainOps — type English, deploy to your own AWS, GCP, or Azure. Local-first AI DevOps engineer; your credentials never leave your machine.",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "demo": "cross-env PLAINOPS_DEMO=1 tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "validate:blueprint": "node scripts/validate-blueprint.mjs",
+    "validate:all-blueprints": "node scripts/validate-all-blueprints.mjs",
+    "build": "node scripts/build-dist.mjs",
+    "app:dev": "npm run build && electron .",
+    "dist:win": "npm run build && electron-builder --win nsis",
+    "dist:mac": "npm run build && electron-builder --mac dmg zip"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.112.1",
+    "@aws-sdk/client-cloudwatch-logs": "^3.600.0",
+    "@aws-sdk/client-codebuild": "^3.600.0",
+    "@aws-sdk/client-cost-explorer": "^3.600.0",
+    "@aws-sdk/client-ec2": "^3.1089.0",
+    "@aws-sdk/client-ecs": "^3.600.0",
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/client-secrets-manager": "^3.600.0",
+    "@aws-sdk/client-sts": "^3.600.0",
+    "adm-zip": "^0.5.14",
+    "archiver": "^7.0.1",
+    "express": "^4.19.2",
+    "open": "^10.1.0"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.5",
+    "@types/archiver": "^6.0.2",
+    "@types/express": "^4.17.21",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.14.0",
+    "@types/supertest": "^6.0.2",
+    "aws-sdk-client-mock": "^4.0.1",
+    "cross-env": "^7.0.3",
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3",
+    "js-yaml": "^5.2.1",
+    "supertest": "^7.0.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  },
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "com.plainops.desktop",
+    "productName": "PlainOps",
+    "asar": false,
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "shortcutName": "PlainOps",
+      "artifactName": "PlainOps-Setup-${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.developer-tools"
+    }
+  }
+}

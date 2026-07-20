@@ -1,0 +1,14 @@
+{
+  "name": "plainops-task-manager",
+  "version": "1.0.0",
+  "description": "A full CRUD task manager (Express + PostgreSQL) to deploy with PLAINOPS.",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.12.0"
+  }
+}

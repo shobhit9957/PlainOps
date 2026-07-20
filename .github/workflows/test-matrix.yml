@@ -1,0 +1,28 @@
+# Cross-platform proof: the full suite + typecheck + blueprint validation on
+# Windows, macOS (Apple Silicon runner), and Linux. The blueprint step
+# downloads a REAL OpenTofu binary per-OS, so the darwin/linux download and
+# executable-bit paths are exercised on every push — not just on Windows dev
+# machines.
+name: Tests (all platforms)
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run validate:all-blueprints
