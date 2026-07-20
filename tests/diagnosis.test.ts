@@ -51,7 +51,10 @@ describe('collectDiagnosis', () => {
     expect(await collectDiagnosis('missing')).toMatch(/not found/);
   });
 
-  it('collects a full evidence bundle for a fresh project without touching any cloud', async () => {
+  // The evidence collector runs many best-effort probes with their own
+  // internal timeouts — legitimately slow on cold CI runners (20s default
+  // flaked on windows-latest).
+  it('collects a full evidence bundle for a fresh project without touching any cloud', { timeout: 60_000 }, async () => {
     const { collectDiagnosis } = await import('../src/diagnosis.js');
     const { upsertProject } = await import('../src/state.js');
     upsertProject({ name: 'fresh', region: 'ap-south-1', status: 'new', createdAt: new Date().toISOString() });
@@ -80,7 +83,7 @@ describe('collectDiagnosis', () => {
     expect(bundle).toMatch(/google_cloud_run_v2_service\.app/);
   });
 
-  it('caps enormous evidence so it cannot blow the model context', async () => {
+  it('caps enormous evidence so it cannot blow the model context', { timeout: 60_000 }, async () => {
     const { collectDiagnosis } = await import('../src/diagnosis.js');
     const { upsertProject } = await import('../src/state.js');
     upsertProject({ name: 'noisy', region: 'ap-south-1', status: 'new', createdAt: new Date().toISOString() });
