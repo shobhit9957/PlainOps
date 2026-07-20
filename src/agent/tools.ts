@@ -109,7 +109,7 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
     name: 'set_app_secret',
     description:
-      'Securely collect a secret VALUE (API key, token) from the founder and store it in their AWS Secrets Manager. Opens a secure form in the dashboard. You only provide the NAME; you never see the value. Use for any env var that holds a secret.',
+      'Securely collect a secret VALUE (API key, token) from the founder and store it in their AWS Secrets Manager. Opens a secure form in the dashboard. You only provide the NAME; you never see the value. Use for any env var that holds a secret. Works for NEW secrets and for UPDATING existing ones — if a value is already saved, the form simply replaces it (the founder is told). When the founder names several secrets, call this once per name — every named secret gets its own form; the dashboard queues them. Never skip a secret the founder asked for just because it is already saved.',
     input_schema: {
       type: 'object',
       properties: { name: { type: 'string', description: 'UPPER_SNAKE_CASE secret name, e.g. STRIPE_KEY.' } },

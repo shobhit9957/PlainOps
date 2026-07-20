@@ -274,6 +274,13 @@ export function createServer() {
     res.json({ ok: true });
   });
 
+  // Founder declined to provide a secret value — resolve the prompt as
+  // "no value" so the agent turn continues instead of hanging to timeout.
+  app.post('/api/secretprompt/:id/skip', (req, res) => {
+    const out = resolveSecretPrompt(req.params.id, false);
+    res.json({ ok: out !== null });
+  });
+
   app.post('/api/action/:id/:verdict', (req, res) => {
     const { id, verdict } = req.params;
     if (verdict !== 'approved' && verdict !== 'rejected') return res.status(400).json({ error: 'bad verdict' });

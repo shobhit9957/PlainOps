@@ -147,9 +147,12 @@
     <div id="secret-modal" class="overlay hidden">
       <div class="overlay-card small">
         <h2>🔒 Add a secret</h2>
+        <p id="secret-queue-note" class="secret-note hidden"></p>
         <p>Enter the value for <code id="secret-name"></code>. It stays on this machine and goes straight to your cloud's secret store — the AI only ever sees <code id="secret-placeholder"></code>.</p>
+        <p id="secret-exists-note" class="secret-note exists hidden">A value for this secret is already saved — storing a new one replaces it.</p>
         <input id="secret-value" type="password" placeholder="Paste the secret value" />
         <button id="secret-save" class="primary">Store securely</button>
+        <button id="secret-skip" class="ghost">Skip this secret</button>
       </div>
     </div>
 

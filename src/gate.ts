@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { emitBus } from './bus.js';
 import { auditLog } from './audit.js';
+import { listSecretNames } from './vault.js';
 
 /**
  * Human-approval gate. Mutating actions BLOCK here until the founder clicks
@@ -80,7 +81,9 @@ export function requestSecretValue(projectName: string, name: string): Promise<b
         resolve(ok);
       },
     });
-    emitBus({ type: 'secret.request', id, projectName, name });
+    // `exists` lets the dashboard say "saving replaces the stored value" —
+    // updating a secret is a normal flow, never a reason to skip the form.
+    emitBus({ type: 'secret.request', id, projectName, name, exists: listSecretNames().includes(name) });
   });
 }
 
