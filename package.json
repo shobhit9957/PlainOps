@@ -55,6 +55,7 @@
   "build": {
     "appId": "com.plainops.desktop",
     "productName": "PlainOps",
+    "publish": null,
     "asar": false,
     "directories": {
       "output": "release",
