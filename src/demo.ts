@@ -56,10 +56,13 @@ export function startDemo(): void {
 }
 
 /** Called by a demo endpoint to replay a scripted conversation. */
-export function replayDemoChat(): void {
+export function replayDemoChat(userText = ''): void {
   const project = 'acme-store';
   const steps: Array<() => void> = [
-    () => emitBus({ type: 'chat.message', projectName: project, text: "Hi! I looked at your Next.js store. It needs a database (I found a DATABASE_URL reference) and a Stripe key. How many customers are you expecting at launch — a few hundred, or thousands?" }),
+    () => {
+      if (userText) emitBus({ type: 'chat.usermsg', projectName: project, text: userText });
+    },
+    () => emitBus({ type: 'chat.message', projectName: project, text: "On it. I analyzed your Next.js store: it needs a database (found a DATABASE_URL reference) and a Stripe key. Here's the full plan and the monthly cost — nothing is created until you approve." }),
     () => emitBus({ type: 'chat.tool', projectName: project, tool: 'propose_infrastructure' }),
     () =>
       emitBus({
@@ -92,4 +95,29 @@ export function replayDemoChat(): void {
       }),
   ];
   steps.forEach((fn, i) => setTimeout(fn, i * 900));
+
+  // …the founder clicks Approve, then the whole deploy streams live.
+  const base = steps.length * 900 + 4200;
+  const after: Array<[number, () => void]> = [
+    [0, () => emitBus({ type: 'action.update', id: 'demo-action-1', verdict: 'approved' })],
+    [400, () => emitBus({ type: 'chat.message', projectName: project, text: 'Approved — building your infrastructure now. Watch the log below; I verify the URL before I ever call it live.' })],
+    [900, () => log('$ tofu apply — plan: 31 resources in us-east-1 (your account)')],
+    [2100, () => log('aws_vpc.main: Creating…')],
+    [3000, () => log('aws_lb.app: Creating… (public entry point)')],
+    [3900, () => log('aws_db_instance.postgres: Creating… db.t4g.micro, 20 GB, 7-day backups')],
+    [5100, () => log('aws_ecs_service.app: Creating… autoscaling 1→4 containers')],
+    [6300, () => log('✓ Apply complete — 31 resources created')],
+    [7200, () => log('$ building container image via CodeBuild — in YOUR cloud, no local Docker')],
+    [9200, () => log('✓ Image pushed → service rolling out')],
+    [10400, () => log('⏳ waiting for steady state… 1/1 tasks healthy')],
+    [11600, () => log('→ probing http://po-acme-store-123.us-east-1.elb.amazonaws.com')],
+    [12400, () => log('✓ HTTP 200 — verified live')],
+    [13400, () => emitBus({ type: 'chat.message', projectName: project, text: "Done — acme-store is live and VERIFIED: the URL answered HTTP 200 (I never call it live on hope).\n\nhttp://po-acme-store-123.us-east-1.elb.amazonaws.com\n\nVPC · ALB · ECS Fargate · RDS Postgres — all in your AWS account at the $46/mo you approved. From here, just ask: \"something's broken\", \"what am I spending?\", \"roll back\"." })],
+    [14200, () => emitBus({ type: 'chat.done', projectName: project })],
+  ];
+  for (const [delay, fn] of after) setTimeout(fn, base + delay);
+
+  function log(line: string): void {
+    emitBus({ type: 'deploy.log', projectName: project, line });
+  }
 }
