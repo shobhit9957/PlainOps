@@ -567,6 +567,9 @@ table.portfolio { width: 100%; border-collapse: collapse; }
   padding: 1px 6px; border-radius: 5px;
 }
 .overlay-card .field { margin-bottom: 14px; }
+.secret-note { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+.secret-note.exists { color: var(--amber); }
+.secret-note.hidden { display: none; }
 .overlay-card label { display: block; font-size: 13px; margin-bottom: 5px; }
 .overlay-card label small { color: var(--muted); font-weight: 400; }
 .overlay-card input, .overlay-card select { width: 100%; }

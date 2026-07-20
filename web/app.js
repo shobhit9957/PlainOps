@@ -326,14 +326,36 @@ function addImageFromFile(file) {
   reader.readAsDataURL(file);
 }
 
+// Secret prompts QUEUE: the agent may request several secrets in one turn
+// (e.g. "set up STRIPE_KEY, DATABASE_URL, JWT_SECRET"). Each request gets its
+// own form, shown one after another — never overwrite or drop a pending one.
+const secretQueue = [];
 function openSecretModal(e) {
+  if (secretQueue.some((p) => p.id === e.id)) return;
+  secretQueue.push(e);
+  renderSecretModal();
+}
+function renderSecretModal() {
+  const cur = secretQueue[0];
+  if (!cur) {
+    $('secret-modal').classList.add('hidden');
+    return;
+  }
   $('secret-modal').classList.remove('hidden');
-  $('secret-name').textContent = e.name;
-  $('secret-placeholder').textContent = '{{secret:' + e.name + '}}';
+  $('secret-name').textContent = cur.name;
+  $('secret-placeholder').textContent = '{{secret:' + cur.name + '}}';
   $('secret-value').value = '';
-  $('secret-save').dataset.promptId = e.id;
-  $('secret-save').dataset.name = e.name;
+  const queueNote = $('secret-queue-note');
+  queueNote.classList.toggle('hidden', secretQueue.length < 2);
+  if (secretQueue.length > 1) {
+    queueNote.textContent = 'Secret 1 of ' + secretQueue.length + ' — the next form opens right after this one.';
+  }
+  $('secret-exists-note').classList.toggle('hidden', !cur.exists);
   $('secret-value').focus();
+}
+function advanceSecretQueue() {
+  secretQueue.shift();
+  renderSecretModal();
 }
 
 // ---------- onboarding ----------
@@ -468,14 +490,25 @@ function init() {
     hideApproval();
   });
 
-  $('secret-save').addEventListener('click', async (e) => {
+  $('secret-save').addEventListener('click', async () => {
+    const cur = secretQueue[0];
     const value = $('secret-value').value;
-    if (!value) return;
+    if (!cur || !value) return;
     await api('/api/secret', {
-      body: { promptId: e.target.dataset.promptId, projectName: state.current, name: e.target.dataset.name, value },
+      body: { promptId: cur.id, projectName: state.current, name: cur.name, value },
     });
-    $('secret-modal').classList.add('hidden');
-    addActivity('Secret stored: ' + e.target.dataset.name);
+    // Advance by QUEUE state, never a blind hide — a new prompt may have
+    // arrived while the store call was in flight, and it must stay visible.
+    advanceSecretQueue();
+    addActivity('Secret stored: ' + cur.name);
+  });
+
+  $('secret-skip').addEventListener('click', async () => {
+    const cur = secretQueue[0];
+    if (!cur) return;
+    await api('/api/secretprompt/' + cur.id + '/skip', { body: {} });
+    advanceSecretQueue();
+    addActivity('Secret skipped: ' + cur.name);
   });
 
   // Onboarding cloud picker
