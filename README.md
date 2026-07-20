@@ -3,7 +3,8 @@
 **Type English. Deploy to your own cloud.**
 
 PlainOps is a local-first AI DevOps engineer you install on your own machine. Connect
-your own AWS / Google Cloud / Azure account and your own Anthropic API key, then deploy
+your own AWS / Google Cloud / Azure account and your own AI key — Claude (recommended),
+OpenAI, Kimi, OpenRouter, DeepSeek, Grok, Gemini, or local Ollama — then deploy
 real applications by describing them in plain English. Your cloud credentials and secret
 values **never leave your machine**, and the AI **never sees a secret value**.
 
@@ -43,7 +44,8 @@ Plus, on every cloud:
 ## The security model (the product promise)
 
 1. **Credentials stay home.** Deploys use your local `aws`/`gcloud`/`az` auth. Nothing
-   is uploaded anywhere except calls to your own cloud and your own Anthropic key.
+   is uploaded anywhere except calls to your own cloud and the AI provider you chose,
+   with your own key.
 2. **The AI never sees a secret value.** Secrets go into an AES-256-GCM local vault and
    straight to your cloud's secret store. The model only ever sees `{{secret:NAME}}`.
    Every model-facing string is scrubbed first.
@@ -103,7 +105,9 @@ machine.
 ## First five minutes
 
 1. Open PlainOps → pick a cloud → name a project (region is pre-picked per cloud).
-2. Paste your Anthropic API key (stored locally).
+2. Pick your AI provider and paste its key (stored locally). Claude is the default and
+   what PlainOps is tuned on; any OpenAI-compatible provider with tool calling works —
+   pick it from the dropdown, quality varies by model.
 3. Type: *"deploy C:\code\my-app"* — or just *describe* the app and PlainOps writes it.
 4. Read the cost estimate, click **Approve**.
 5. Get a verified live URL. Ask "how much is this costing me?" or "run a diagnosis" any time.
@@ -126,7 +130,7 @@ machine.
 ## Develop
 
 ```bash
-npm test                     # vitest — 35 files, 244 tests
+npm test                     # vitest — 38 files, 257 tests
 npm run typecheck
 npm run validate:all-blueprints   # tofu-validates all 9 blueprints
 npm run build                # compile + assets for the desktop shell

@@ -18,6 +18,7 @@ import { runTurn, type InboundImage } from './agent/loop.js';
 import { explainError } from './errors.js';
 import { scrub } from './scrub.js';
 import { listFollowups, cancelFollowup } from './followups.js';
+import { PROVIDERS, providerById, activeAI, aiReady, aiErrorHint } from './agent/providers.js';
 import { startDemo, replayDemoChat } from './demo.js';
 
 const ALLOWED_IMAGE_TYPES: Record<string, InboundImage['mediaType']> = {
@@ -55,13 +56,15 @@ export interface Preflight {
   node: boolean;
   git: boolean;
   aws: { ok: boolean; accountId?: string };
+  /** Whether the ACTIVE AI provider is ready (key present or keyless). */
   anthropicKey: boolean;
+  aiLabel?: string;
   tofu: boolean;
 }
 
 export async function preflight(): Promise<Preflight> {
   if (isDemoMode()) {
-    return { node: true, git: true, aws: { ok: true, accountId: '123456789012' }, anthropicKey: true, tofu: true };
+    return { node: true, git: true, aws: { ok: true, accountId: '123456789012' }, anthropicKey: true, aiLabel: 'Demo', tofu: true };
   }
   const cfg = loadConfig();
   const major = parseInt(process.versions.node.split('.')[0], 10);
@@ -74,7 +77,7 @@ export async function preflight(): Promise<Preflight> {
     aws = { ok: false };
   }
   const tofuOrTerraform = tofu || (await version('terraform', ['version']));
-  return { node: major >= 20, git, aws, anthropicKey: Boolean(cfg.anthropicApiKey), tofu: tofuOrTerraform };
+  return { node: major >= 20, git, aws, anthropicKey: aiReady(cfg).ok, aiLabel: activeAI(cfg).provider.label, tofu: tofuOrTerraform };
 }
 
 export function createServer() {
@@ -88,21 +91,62 @@ export function createServer() {
 
   app.get('/api/state', (_req, res) => {
     const cfg = loadConfig();
+    const ai = activeAI(cfg);
+    const keys = cfg.aiKeys ?? {};
     res.json({
       projects: loadState().projects,
-      config: { model: cfg.model, hasKey: Boolean(cfg.anthropicApiKey) },
+      config: {
+        model: ai.model,
+        hasKey: aiReady(cfg).ok,
+        provider: ai.provider.id,
+        providerLabel: ai.provider.label,
+        baseUrl: ai.provider.editableBaseUrl ? (ai.baseUrl ?? '') : undefined,
+        modelOverrides: cfg.aiModels ?? {},
+        keysPresent: Object.fromEntries(
+          PROVIDERS.map((p) => [p.id, Boolean(keys[p.id] ?? (p.id === 'anthropic' ? cfg.anthropicApiKey : undefined))]),
+        ),
+        providers: PROVIDERS.map(({ id, label, defaultModel, keysUrl, keyless, editableBaseUrl, baseUrl }) => ({
+          id,
+          label,
+          defaultModel,
+          keysUrl,
+          keyless: Boolean(keyless),
+          editableBaseUrl: Boolean(editableBaseUrl),
+          baseUrl: baseUrl ?? '',
+        })),
+      },
       demo: isDemoMode(),
       pendingActions: listPendingActions(),
     });
   });
 
   app.post('/api/config', (req, res) => {
-    const { anthropicApiKey, model } = req.body ?? {};
+    const { anthropicApiKey, model, aiProvider, aiKey, aiModel, aiBaseUrl } = req.body ?? {};
+    const before = loadConfig();
     const patch: Record<string, unknown> = {};
-    if (typeof anthropicApiKey === 'string' && anthropicApiKey.trim()) patch.anthropicApiKey = anthropicApiKey.trim();
+    // Legacy fields (older UI / tests) keep working and land in the new maps too.
+    if (typeof anthropicApiKey === 'string' && anthropicApiKey.trim()) {
+      patch.anthropicApiKey = anthropicApiKey.trim();
+      patch.aiKeys = { ...before.aiKeys, anthropic: anthropicApiKey.trim() };
+    }
     if (typeof model === 'string' && model.trim()) patch.model = model.trim();
+
+    const target =
+      typeof aiProvider === 'string' && aiProvider ? providerById(aiProvider).id : (before.aiProvider ?? 'anthropic');
+    if (typeof aiProvider === 'string' && aiProvider) patch.aiProvider = target;
+    if (typeof aiKey === 'string' && aiKey.trim()) {
+      patch.aiKeys = { ...(patch.aiKeys as Record<string, string> | undefined ?? before.aiKeys), [target]: aiKey.trim() };
+      if (target === 'anthropic') patch.anthropicApiKey = aiKey.trim();
+    }
+    if (typeof aiModel === 'string') {
+      patch.aiModels = { ...before.aiModels, [target]: aiModel.trim() };
+      if (target === 'anthropic' && aiModel.trim()) patch.model = aiModel.trim();
+    }
+    if (typeof aiBaseUrl === 'string' && aiBaseUrl.trim()) {
+      patch.aiBaseUrls = { ...before.aiBaseUrls, [target]: aiBaseUrl.trim() };
+    }
     const cfg = saveConfig(patch);
-    res.json({ ok: true, model: cfg.model, hasKey: Boolean(cfg.anthropicApiKey) });
+    res.json({ ok: true, model: activeAI(cfg).model, hasKey: aiReady(cfg).ok, provider: activeAI(cfg).provider.id });
   });
 
   app.post('/api/project', (req, res) => {
@@ -259,8 +303,9 @@ export function createServer() {
       return res.status(400).json({ error: 'Create or select a project first (top-left), then chat.' });
     }
     const cfg = loadConfig();
-    if (!isDemoMode() && !cfg.anthropicApiKey) {
-      return res.status(400).json({ error: 'Add your Anthropic API key in Settings (⚙) first — it powers the AI.' });
+    if (!isDemoMode()) {
+      const ready = aiReady(cfg);
+      if (!ready.ok) return res.status(400).json({ error: ready.reason });
     }
     if (isDemoMode()) {
       replayDemoChat();
@@ -269,7 +314,7 @@ export function createServer() {
     const parsedImages = parseInboundImages(images);
     // Fire and forget — progress streams over SSE.
     runTurn(projectName, String(text ?? ''), parsedImages).catch((e) => {
-      emitBus({ type: 'chat.message', projectName, text: scrub(explainError(e)) });
+      emitBus({ type: 'chat.message', projectName, text: scrub(explainError(e, aiErrorHint(loadConfig()))) });
       emitBus({ type: 'chat.done', projectName });
     });
     res.json({ ok: true });

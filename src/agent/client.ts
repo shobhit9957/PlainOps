@@ -11,8 +11,9 @@ export function setClientForTests(client: unknown): void {
 export function getClient(): Anthropic {
   if (testClient) return testClient;
   const cfg = loadConfig();
-  if (!cfg.anthropicApiKey) {
+  const key = cfg.aiKeys?.anthropic ?? cfg.anthropicApiKey;
+  if (!key) {
     throw new Error('No Anthropic API key configured. Add one in the dashboard settings.');
   }
-  return new Anthropic({ apiKey: cfg.anthropicApiKey });
+  return new Anthropic({ apiKey: key });
 }

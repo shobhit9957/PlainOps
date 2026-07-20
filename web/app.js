@@ -28,6 +28,49 @@ const LIGHT_THEMES = ['fern', 'paper'];
   });
 })();
 
+// ------------------------------------------------------------ AI providers
+function providerDef(id) {
+  return (state.config?.providers ?? []).find((p) => p.id === id);
+}
+function fillProviderSelect(sel) {
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '';
+  for (const p of state.config?.providers ?? []) {
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = p.label + (state.config?.keysPresent?.[p.id] ? ' ✓' : '');
+    sel.appendChild(o);
+  }
+  sel.value = current || state.config?.provider || 'anthropic';
+  if (!sel.value) sel.value = 'anthropic';
+}
+/** Sync key/model/base-url fields to the chosen provider. prefix: 'set' | 'ob'. */
+function syncProviderFields(prefix) {
+  const sel = $(prefix + '-provider');
+  if (!sel || !sel.value) return;
+  const p = providerDef(sel.value) || {};
+  const keyField = $(prefix + '-key-field');
+  if (keyField) keyField.classList.toggle('hidden', Boolean(p.keyless));
+  const hint = $(prefix + '-key-hint');
+  if (hint) {
+    hint.innerHTML = p.keyless
+      ? '(no key needed — local runtime)'
+      : p.keysUrl
+        ? '— <a href="' + p.keysUrl + '" target="_blank" rel="noopener">get a key ↗</a>'
+        : '';
+  }
+  const keyInput = $(prefix + '-key');
+  if (keyInput) keyInput.placeholder = p.id === 'anthropic' ? 'sk-ant-…' : 'Paste the API key';
+  if (prefix === 'set') {
+    $('set-baseurl-field').classList.toggle('hidden', !p.editableBaseUrl);
+    $('set-baseurl').value =
+      sel.value === state.config?.provider && state.config?.baseUrl ? state.config.baseUrl : p.baseUrl || '';
+    $('set-model').placeholder = p.defaultModel || 'model name (required for custom endpoints)';
+    $('set-model').value = state.config?.modelOverrides?.[sel.value] || '';
+  }
+}
+
 const REGIONS = {
   aws: [
     ['ap-south-1', 'ap-south-1 (Mumbai)'],
@@ -273,6 +316,13 @@ async function refreshState() {
   const s = await api('/api/state');
   state.projects = s.projects;
   state.demo = s.demo;
+  state.config = s.config;
+  // Onboarding renders before any modal opens — keep its provider list fresh.
+  const obSel = $('ob-provider');
+  if (obSel && obSel.options.length === 0) {
+    fillProviderSelect(obSel);
+    syncProviderFields('ob');
+  }
   if (!state.current && s.projects.length) state.current = s.projects[0].name;
   renderProjects();
   if (s.pendingActions && s.pendingActions.length) showApproval(s.pendingActions[0]);
@@ -530,7 +580,9 @@ function init() {
     const repoPath = $('ob-path').value.trim();
     const region = $('ob-region').value;
     $('ob-error').classList.add('hidden');
-    if (key) await api('/api/config', { body: { anthropicApiKey: key } });
+    if (key || $('ob-provider').value !== (state.config?.provider ?? 'anthropic')) {
+      await api('/api/config', { body: { aiProvider: $('ob-provider').value, aiKey: key } });
+    }
     if (name) {
       // repoPath is OPTIONAL — a project can be for questions or a static site.
       const r = await api('/api/project', { body: { name, repoPath, region, cloud: obCloud } });
@@ -547,11 +599,23 @@ function init() {
 
   $('settings-btn').addEventListener('click', () => {
     $('settings-modal').classList.remove('hidden');
+    fillProviderSelect($('set-provider'));
+    syncProviderFields('set');
     renderConnectorStatus();
   });
+  $('set-provider').addEventListener('change', () => syncProviderFields('set'));
+  $('ob-provider').addEventListener('change', () => syncProviderFields('ob'));
   $('set-close').addEventListener('click', () => $('settings-modal').classList.add('hidden'));
   $('set-save').addEventListener('click', async () => {
-    await api('/api/config', { body: { anthropicApiKey: $('set-key').value.trim(), model: $('set-model').value.trim() } });
+    await api('/api/config', {
+      body: {
+        aiProvider: $('set-provider').value,
+        aiKey: $('set-key').value.trim(),
+        aiModel: $('set-model').value.trim(),
+        aiBaseUrl: $('set-baseurl').value.trim(),
+      },
+    });
+    $('set-key').value = '';
     const conn = {
       githubToken: $('conn-github').value.trim(),
       slack: $('conn-slack').value.trim(),

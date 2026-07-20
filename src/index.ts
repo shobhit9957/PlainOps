@@ -20,7 +20,7 @@ async function main() {
   console.log(`    git .............. ${pf.git ? 'OK' : 'MISSING'}`);
   console.log(`    OpenTofu/Terraform ${pf.tofu ? 'OK' : 'will auto-download on first use'}`);
   console.log(`    AWS credentials .. ${pf.aws.ok ? `OK (account ${pf.aws.accountId})` : 'NOT FOUND — run `aws configure`'}`);
-  console.log(`    Anthropic API key  ${pf.anthropicKey ? 'OK' : 'add it in the dashboard'}`);
+  console.log(`    AI provider ...... ${pf.anthropicKey ? `OK (${pf.aiLabel})` : `add a key in the dashboard (${pf.aiLabel})`}`);
   if (isDemoMode()) console.log('\n  DEMO MODE — no AWS or API calls will be made.\n');
 
   maybeStartDemo();
