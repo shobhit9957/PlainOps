@@ -21,12 +21,38 @@ jobs:
 
   mac:
     runs-on: macos-latest
+    # Zero-warning mac builds need an Apple Developer account. The day these
+    # four repo secrets exist, this job signs with the real Developer ID and
+    # notarizes automatically — no workflow change needed:
+    #   MACOS_CERT_P12        (Developer ID Application cert, base64 .p12)
+    #   MACOS_CERT_PASSWORD   (the .p12 password)
+    #   APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID (notary)
+    # Until then it falls back to ad-hoc signing (runs, but Gatekeeper warns).
+    env:
+      HAS_APPLE_CERT: ${{ secrets.MACOS_CERT_P12 != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - run: npm ci
+      - name: Import Developer ID certificate
+        if: env.HAS_APPLE_CERT == 'true'
+        run: |
+          echo "$MACOS_CERT_P12" | base64 --decode > cert.p12
+          security create-keychain -p ci build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p ci build.keychain
+          security import cert.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci build.keychain
+          rm cert.p12
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
       - run: npm run dist:mac
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       - uses: actions/upload-artifact@v4
         with:
           name: plainops-mac

@@ -9,6 +9,9 @@ const path = require('node:path');
 
 exports.default = async function adhocSign(context) {
   if (context.electronPlatformName !== 'darwin') return;
+  // A real Developer ID is configured — electron-builder signs + notarizes;
+  // stay out of the way.
+  if (process.env.CSC_LINK || process.env.HAS_APPLE_CERT === 'true') return;
   const appName = `${context.packager.appInfo.productFilename}.app`;
   const appPath = path.join(context.appOutDir, appName);
   execFileSync('codesign', ['--force', '--deep', '--sign', '-', appPath], { stdio: 'inherit' });
