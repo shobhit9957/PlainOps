@@ -90,6 +90,51 @@
   --radius: 10px;
 }
 
+/* --------------------------------------------- the Verdant pair --------- */
+/* Green & white product language in the same flat press treatment:
+   white grounds, deep-green ink text, ONE evergreen accent — no gradients,
+   no glow. Pine is the dark twin. Fern is the product default. */
+
+[data-theme="fern"] {
+  --bg: #F4F7F3; --surface: #FFFFFF; --border: #DCE4DA;
+  --text: #17221B; --muted: #64726A;
+  --jade: #1E7A4C;   /* evergreen — actions and links */
+  --amber: #A8752D;  /* ochre — the approval signature, ink-legible */
+  --red: #B3432B;
+  --grad-a: #1E7A4C; --grad-b: #1E7A4C;   /* flat: gradients collapse */
+  --glow-a: transparent; --glow-b: transparent;
+  --on-accent: #F3FBF6;
+  --terminal-bg: #14201A; --terminal-fg: #A9C4B0;
+  --success: #2F8F5B;
+  --chip-azure: #3E6B96;
+  --card-shadow: 0 1px 2px rgba(23, 54, 36, .05), 0 10px 28px rgba(23, 54, 36, .07);
+  --btn-shadow: none;
+  --btn-shadow-hover: 0 2px 12px rgba(30, 122, 76, .30);
+  --overlay-bg: rgba(18, 36, 26, .45);
+  --font-display: "Fraunces", Georgia, serif;
+  --radius: 10px;
+}
+
+[data-theme="pine"] {
+  --bg: #0F1613; --surface: #17211B; --border: #28382F;
+  --text: #E7F0E9; --muted: #93A89B;
+  --jade: #3FBE7E;   /* spring green on pine dark */
+  --amber: #D9A03F;
+  --red: #E06A4B;
+  --grad-a: #3FBE7E; --grad-b: #3FBE7E;
+  --glow-a: transparent; --glow-b: transparent;
+  --on-accent: #07130C;
+  --terminal-bg: #0A100C; --terminal-fg: #93A89B;
+  --success: #5FC48F;
+  --chip-azure: #86A8C8;
+  --card-shadow: 0 1px 0 rgba(0, 0, 0, .25);
+  --btn-shadow: none;
+  --btn-shadow-hover: 0 2px 12px rgba(63, 190, 126, .25);
+  --overlay-bg: rgba(0, 0, 0, .55);
+  --font-display: "Fraunces", Georgia, serif;
+  --radius: 10px;
+}
+
 [data-theme="aurora"] {
   --bg: #0A100E; --surface: #101915; --border: #21322A;
   --text: #E4EFE9; --muted: #86A296;
@@ -240,6 +285,8 @@ button.ghost {
   transition: color .15s ease, border-color .15s ease, transform .12s ease;
 }
 button.ghost:hover { color: var(--text); border-color: var(--jade); }
+
+.mode-toggle { padding: 6px 10px; line-height: 1; font-size: 14px; }
 
 button.primary, #chat-form button, #ob-start {
   background: linear-gradient(135deg, var(--grad-a), var(--grad-b));

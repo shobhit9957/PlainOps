@@ -9,7 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;650&family=IBM+Plex+Mono:wght@400;600&family=Fraunces:opsz,wght@9..144,500;9..144,650&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body data-theme="paper">
+  <body data-theme="fern">
     <header>
       <div class="brand"><span class="brand-mark">&gt;_</span> PlainOps</div>
       <nav class="tabs" id="tabs">
@@ -17,7 +17,10 @@
         <button class="tab" data-tab="costs">Costs</button>
       </nav>
       <div class="spacer"></div>
+      <button id="mode-toggle" class="ghost mode-toggle" title="Switch light / dark">&#9789;</button>
       <select id="theme-select" title="Theme">
+        <option value="fern">Fern · Green light</option>
+        <option value="pine">Pine · Green dark</option>
         <option value="paper">Paper</option>
         <option value="ink">Ink</option>
         <option value="nebula">Nebula</option>

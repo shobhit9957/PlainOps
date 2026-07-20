@@ -4,19 +4,28 @@ const $ = (id) => document.getElementById(id);
 const state = { projects: [], current: null, demo: false, clouds: null };
 
 // ------------------------------------------------------------------ theme
-const THEMES = ['paper', 'ink', 'nebula', 'aurora', 'sunset', 'cobalt', 'synthwave', 'jade'];
+const THEMES = ['fern', 'pine', 'paper', 'ink', 'nebula', 'aurora', 'sunset', 'cobalt', 'synthwave', 'jade'];
+const LIGHT_THEMES = ['fern', 'paper'];
 (() => {
   const saved = localStorage.getItem('plainops-theme');
-  const theme = THEMES.includes(saved) ? saved : 'paper';
-  document.body.dataset.theme = theme;
   const sel = $('theme-select');
-  if (sel) {
-    sel.value = theme;
-    sel.addEventListener('change', () => {
-      document.body.dataset.theme = sel.value;
-      localStorage.setItem('plainops-theme', sel.value);
-    });
-  }
+  const toggle = $('mode-toggle');
+  const apply = (theme) => {
+    document.body.dataset.theme = theme;
+    localStorage.setItem('plainops-theme', theme);
+    if (sel) sel.value = theme;
+    // Button shows the mode you'd switch INTO: moon on light, sun on dark.
+    if (toggle) toggle.textContent = LIGHT_THEMES.includes(theme) ? '☽' : '☀';
+  };
+  // v2 ships the green pair as the chosen default — migrate any pre-green
+  // saved pick to fern ONCE; picks made after that stick normally.
+  const migrated = localStorage.getItem('plainops-theme-v') === '2';
+  localStorage.setItem('plainops-theme-v', '2');
+  apply(migrated && THEMES.includes(saved) ? saved : 'fern');
+  if (sel) sel.addEventListener('change', () => apply(sel.value));
+  if (toggle) toggle.addEventListener('click', () => {
+    apply(LIGHT_THEMES.includes(document.body.dataset.theme) ? 'pine' : 'fern');
+  });
 })();
 
 const REGIONS = {
