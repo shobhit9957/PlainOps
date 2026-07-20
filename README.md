@@ -58,8 +58,20 @@ Plus, on every cloud:
 
 ## Install
 
-**Desktop app (recommended):** run `PlainOps-Setup-<version>.exe` (Windows). macOS
-builds come from `npm run dist:mac` on a Mac (or the GitHub Actions workflow).
+**Desktop app (recommended):** grab it from [Releases](https://github.com/shobhit9957/PlainOps/releases/latest).
+
+- **Windows 10/11:** run `PlainOps-Setup.exe`.
+- **macOS 11+ (Apple Silicon & Intel):** paste this in Terminal — it picks the right
+  build and installs with no Gatekeeper warning (terminal downloads aren't quarantined):
+
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/shobhit9957/PlainOps/main/scripts/install-mac.sh | bash
+  ```
+
+  Prefer the `.dmg`? The build is ad-hoc signed but not yet notarized with Apple, so
+  macOS may call a browser-downloaded copy "damaged" — fix with
+  `xattr -cr /Applications/PlainOps.app`, or System Settings → Privacy & Security →
+  **Open Anyway**.
 
 **From source:**
 

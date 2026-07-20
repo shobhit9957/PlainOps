@@ -1,6 +1,6 @@
 {
   "name": "plainops",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "PlainOps — type English, deploy to your own AWS, GCP, or Azure. Local-first AI DevOps engineer; your credentials never leave your machine.",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE.md",
@@ -56,6 +56,7 @@
     "appId": "com.plainops.desktop",
     "productName": "PlainOps",
     "publish": null,
+    "afterPack": "scripts/mac-adhoc-sign.cjs",
     "asar": false,
     "directories": {
       "output": "release",
