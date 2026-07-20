@@ -3,7 +3,17 @@ import os from 'node:os';
 import path from 'node:path';
 
 export interface AppConfig {
+  /** Legacy field — still honored as the Anthropic key for existing installs. */
   anthropicApiKey?: string;
+  /** Active AI provider id (see agent/providers.ts). Default: anthropic. */
+  aiProvider?: string;
+  /** API keys per provider id — switching providers never loses a key. */
+  aiKeys?: Record<string, string>;
+  /** Model override per provider id (blank = the provider's default). */
+  aiModels?: Record<string, string>;
+  /** Base-URL override per provider id (Ollama / custom endpoints). */
+  aiBaseUrls?: Record<string, string>;
+  /** Legacy Anthropic model field — used when provider is anthropic. */
   model: string;
   port: number;
 }

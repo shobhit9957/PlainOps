@@ -6,6 +6,8 @@ import { systemPrompt } from './prompt.js';
 import { TOOL_DEFINITIONS, dispatchTool, type ToolContext } from './tools.js';
 import { scrub } from '../scrub.js';
 import { explainError } from '../errors.js';
+import { activeAI, aiErrorHint } from './providers.js';
+import { runOpenAiCompatTurn } from './openaicompat.js';
 import { auditLog } from '../audit.js';
 import { emitBus } from '../bus.js';
 
@@ -85,7 +87,7 @@ async function processProject(projectName: string): Promise<void> {
       try {
         await processOneMessage(projectName, next.text, next.images, next.ctx);
       } catch (e) {
-        emitBus({ type: 'chat.message', projectName, text: scrub(explainError(e)) });
+        emitBus({ type: 'chat.message', projectName, text: scrub(explainError(e, aiErrorHint(loadConfig()))) });
       } finally {
         next.resolve();
       }
@@ -105,8 +107,8 @@ async function processOneMessage(
 ): Promise<void> {
   const project = getProject(projectName);
   if (!project) throw new Error(`Unknown project: ${projectName}`);
-  const client = getClient();
   const cfg = loadConfig();
+  const ai = activeAI(cfg);
 
   const history = histories.get(projectName) ?? [];
   history.push({ role: 'user', content: buildUserContent(userText, images) });
@@ -116,36 +118,58 @@ async function processOneMessage(
   const toolCtx: ToolContext = { projectName, ...ctx };
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
-    const stream = client.messages.stream({
-      model: cfg.model,
-      max_tokens: 16000,
-      system: systemPrompt(getProject(projectName) ?? project),
-      tools: TOOL_DEFINITIONS,
-      messages: history,
-    });
+    const system = systemPrompt(getProject(projectName) ?? project);
+    let assistantText: string;
+    let toolUses: Array<{ id: string; name: string; input: unknown }>;
+    let stoppedForTools: boolean;
 
-    stream.on('text', (delta: string) => {
-      emitBus({ type: 'chat.delta', projectName, text: scrub(delta) });
-    });
+    if (ai.provider.kind === 'anthropic') {
+      const client = getClient();
+      const stream = client.messages.stream({
+        model: ai.model,
+        max_tokens: 16000,
+        system,
+        tools: TOOL_DEFINITIONS,
+        messages: history,
+      });
 
-    const message = await stream.finalMessage();
-    history.push({ role: 'assistant', content: message.content });
+      stream.on('text', (delta: string) => {
+        emitBus({ type: 'chat.delta', projectName, text: scrub(delta) });
+      });
 
-    const assistantText = message.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('');
+      const message = await stream.finalMessage();
+      history.push({ role: 'assistant', content: message.content });
+
+      assistantText = message.content
+        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+        .map((b) => b.text)
+        .join('');
+      stoppedForTools = message.stop_reason === 'tool_use';
+      toolUses = message.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
+    } else {
+      // Every non-Anthropic provider speaks the OpenAI-compatible protocol.
+      const r = await runOpenAiCompatTurn({
+        ai,
+        system,
+        history,
+        tools: TOOL_DEFINITIONS,
+        onDelta: (delta) => emitBus({ type: 'chat.delta', projectName, text: scrub(delta) }),
+      });
+      history.push({ role: 'assistant', content: r.assistantBlocks });
+      assistantText = r.text;
+      toolUses = r.toolUses;
+      stoppedForTools = r.stoppedForTools;
+    }
+
     if (assistantText) {
       emitBus({ type: 'chat.message', projectName, text: scrub(assistantText) });
       auditLog({ type: 'chat.assistant', summary: assistantText });
     }
 
-    if (message.stop_reason !== 'tool_use') {
+    if (!stoppedForTools) {
       emitBus({ type: 'chat.done', projectName });
       return;
     }
-
-    const toolUses = message.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
     const results: Anthropic.ToolResultBlockParam[] = [];
     for (const use of toolUses) {
       emitBus({ type: 'chat.tool', projectName, tool: use.name });
