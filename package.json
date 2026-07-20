@@ -17,7 +17,7 @@
     "build": "node scripts/build-dist.mjs",
     "app:dev": "npm run build && electron .",
     "dist:win": "npm run build && electron-builder --win nsis",
-    "dist:mac": "npm run build && electron-builder --mac dmg zip"
+    "dist:mac": "npm run build && electron-builder --mac"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.1",
