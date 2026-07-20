@@ -258,6 +258,9 @@ function connectEvents() {
       case 'action.update': hideApproval(); addActivity('Action ' + e.verdict); break;
       case 'deploy.log': addBuildLog(e.line); break;
       case 'secret.request': openSecretModal(e); break;
+      case 'followup.scheduled': addActivity('⏰ Follow-up queued: ' + e.task.slice(0, 80)); break;
+      case 'followup.fired': addMsg('tool', '⏰ Running a scheduled follow-up: ' + e.task.slice(0, 120)); addActivity('Follow-up running'); break;
+      case 'followup.cancelled': addActivity('Follow-up cancelled'); break;
       case 'status.update': refreshState(); break;
     }
   };

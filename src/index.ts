@@ -2,6 +2,8 @@ import open from 'open';
 import { loadConfig, isDemoMode } from './config.js';
 import { createServer, preflight, maybeStartDemo } from './server.js';
 import { startWatchers } from './cicd.js';
+import { initFollowups } from './followups.js';
+import { runTurn } from './agent/loop.js';
 
 const BANNER = `
   ⚓  PLAINOPS — your self-hosted AI DevOps engineer
@@ -22,7 +24,10 @@ async function main() {
   if (isDemoMode()) console.log('\n  DEMO MODE — no AWS or API calls will be made.\n');
 
   maybeStartDemo();
-  if (!isDemoMode()) startWatchers();
+  if (!isDemoMode()) {
+    startWatchers();
+    initFollowups((projectName, text) => runTurn(projectName, text));
+  }
 
   const app = createServer();
   const server = app.listen(cfg.port, () => {

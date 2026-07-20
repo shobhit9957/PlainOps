@@ -29,6 +29,9 @@ import { notifyDeveloper, anyChannelConfigured, configuredChannels } from '../no
 import { rotatableSecrets, bounceService } from '../rotate.js';
 import { createSchedule, listSchedules, removeSchedule, normalizeSchedule } from '../schedule.js';
 import { preflightLaunch, checkVersions } from '../readiness.js';
+import { classifyGh, runGh, planPush, executePush } from '../github.js';
+import { scheduleFollowup, listFollowups, cancelFollowup } from '../followups.js';
+import { getSecret } from '../vault.js';
 import { auditLog } from '../audit.js';
 import { emitBus } from '../bus.js';
 import fs from 'node:fs';
@@ -485,6 +488,64 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
       'Read-only version-hygiene check, instant: Dockerfile base images, Lambda runtimes, and the database engine against an end-of-life table. Flags anything past or approaching EOL with the date and the move to make. Run it periodically or when the founder asks about updates/patches/security hygiene.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
+  {
+    name: 'gh_cli',
+    description:
+      "Run a GitHub CLI command with the founder's own logged-in `gh` — check repos, Actions runs, releases, PRs, or change them. Args AFTER `gh` as a string array, e.g. ['run','list','--repo','owner/name'] or ['repo','create','owner/name','--private']. Read-only commands run instantly; anything that creates/changes/deletes needs the founder's click-approval. Refuses commands that would print tokens or key material (auth login/token, config, ssh-key…) and refuses `secret set` — use set_github_secret for values. After wiring CI/CD, use this to VERIFY the pipeline actually ran green (gh run list / gh run view).",
+    input_schema: {
+      type: 'object',
+      properties: {
+        args: { type: 'array', items: { type: 'string' }, description: "Arguments after `gh`, e.g. ['run','list','--repo','owner/name']." },
+        reason: { type: 'string', description: 'One line shown to the founder on the approval card for mutating commands.' },
+      },
+      required: ['args'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'push_to_github',
+    description:
+      "Publish the project's code to GitHub using the founder's logged-in gh + git: initializes git if needed, commits everything, creates the repo when it doesn't exist — or pushes into an existing one (e.g. an empty repo the founder just created) — and pushes main. Requires the founder's click-approval showing the exact folder, repo, and visibility. Commit identity and push credentials are pinned to the founder's active gh account. Use this after setup_cicd so the workflow file actually reaches GitHub.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        repo: { type: 'string', description: "Repo as 'name' or 'owner/name'. Default: the project's name under the founder's account." },
+        visibility: { type: 'string', enum: ['private', 'public'], description: 'Only used when creating a new repo. Default private.' },
+        commit_message: { type: 'string', description: 'Commit message. Default "Update via PlainOps".' },
+        source_path: { type: 'string', description: "Folder to publish. Default: the project's repo path." },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'set_github_secret',
+    description:
+      "Set a GitHub Actions repository secret (e.g. AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY for CI/CD) WITHOUT ever seeing the value: a secure form opens in the dashboard, the founder pastes the value, and it goes straight from the form into `gh secret set`. Call once per secret name — the dashboard queues multiple forms. Overwrites existing secrets (updating is normal). You cannot mint AWS access keys yourself (create-access-key is refused for your safety): offer to create the scoped IAM USER + policy via aws_cli, then have the founder click 'Create access key' in the IAM console and paste both values here.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        repo: { type: 'string', description: "Target repo as 'owner/name'." },
+        name: { type: 'string', description: 'UPPER_SNAKE_CASE secret name, e.g. AWS_ACCESS_KEY_ID.' },
+      },
+      required: ['repo', 'name'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'schedule_followup',
+    description:
+      "Queue work for YOURSELF to run automatically later — never tell the founder 'check back in 20 minutes'. When it fires, the task re-enters this chat as instructions to you and you finish the job (all approval gates still apply). Use it whenever you are waiting on something external, on ANY cloud: ACM / Cloud Run / Container Apps certificate validation, DNS or nameserver propagation, CloudFront deployment, long remote builds. action='create' needs task + delay_minutes (1–10080); 'list' and 'cancel' (with id) manage the queue. Follow-ups persist across app restarts but only fire while PlainOps is open — say so to the founder. If the thing is still pending when you check, do the next step you can and chain another follow-up.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['create', 'list', 'cancel'], description: "Default 'create'." },
+        task: { type: 'string', description: "What to do when it fires, specific and self-contained, e.g. 'Check ACM cert arn:… ; when ISSUED, create the CloudFront distribution for plainops.cloud, add the Route 53 aliases, verify https serves.'" },
+        delay_minutes: { type: 'number', description: 'Minutes from now (1 to 10080).' },
+        id: { type: 'string', description: "For action='cancel': the follow-up id." },
+      },
+      additionalProperties: false,
+    },
+  },
 ];
 
 const SIZE_MAP: Record<string, { cpu: 256 | 512 | 1024; memoryMb: 512 | 1024 | 2048 }> = {
@@ -742,6 +803,82 @@ async function dispatchRaw(
       const capped = out.length > 6000 ? out.slice(0, 6000) + '\n…(truncated)' : out;
       if (res.code !== 0) return `Command exited with code ${res.code}:\n${capped}`;
       return capped;
+    }
+
+    case 'gh_cli': {
+      const args = Array.isArray(input.args) ? (input.args as unknown[]).map(String) : [];
+      if (args.length === 0) return 'No gh arguments provided.';
+      const cls = classifyGh(args);
+      if (cls.kind === 'denied') {
+        return `For your security I won't run "${cls.pretty}" — ${cls.reason}.`;
+      }
+      if (cls.kind === 'mutate') {
+        const verdict = await requestApproval({
+          type: 'action',
+          projectName: project.name,
+          summary: `Run a GitHub command that changes things:\n${cls.pretty}${input.reason ? `\n\n(${input.reason})` : ''}`,
+        });
+        if (verdict !== 'approved') return 'The founder did not approve this GitHub command. Nothing was run.';
+      }
+      emitLog(`$ ${cls.pretty}`);
+      auditLog({ type: 'gh.cli', summary: cls.pretty });
+      const res = await runGh(args);
+      const out = (res.stdout || res.stderr || '(no output)').trim();
+      const capped = out.length > 6000 ? out.slice(0, 6000) + '\n…(truncated)' : out;
+      if (res.code !== 0) return `Command exited with code ${res.code}:\n${capped}`;
+      return capped;
+    }
+
+    case 'push_to_github': {
+      const dir = input.source_path ? String(input.source_path) : (project.repoPath ?? '');
+      if (!dir) return 'This project has no repo path — pass source_path (the folder to publish).';
+      const visibility = input.visibility === 'public' ? 'public' : 'private';
+      const commitMessage = String(input.commit_message ?? 'Update via PlainOps').slice(0, 200);
+      const planned = await planPush(dir, input.repo ? String(input.repo) : undefined, visibility, commitMessage, project.name);
+      if (!planned.plan) return planned.error ?? 'Could not plan the push.';
+      const p = planned.plan;
+      const verdict = await requestApproval({
+        type: 'action',
+        projectName: project.name,
+        summary: `Push this folder to GitHub:\n${p.dir}\n→ github.com/${p.owner}/${p.repo} (${p.createRepo ? `new ${p.visibility} repo` : 'existing repo'}) · ${p.fileCount} files · branch main`,
+      });
+      if (verdict !== 'approved') return 'The founder did not approve the push. Nothing was sent to GitHub.';
+      auditLog({ type: 'github.push', summary: `${p.dir} → ${p.owner}/${p.repo}` });
+      return executePush(p);
+    }
+
+    case 'set_github_secret': {
+      const repo = String(input.repo ?? '').trim();
+      const name = String(input.name ?? '')
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9_]/g, '_');
+      if (!repo || !name) return 'Both repo (owner/name) and name are required.';
+      const ok = await requestSecretValue(project.name, name);
+      if (!ok) return `The founder did not provide a value for ${name}. Nothing was set on GitHub.`;
+      const value = getSecret(name);
+      if (!value) return `No value found for ${name} after the secure form — ask the founder to try again.`;
+      const res = await runGh(['secret', 'set', name, '--repo', repo], { input: value });
+      if (res.code !== 0) return `gh secret set failed:\n${(res.stderr || res.stdout).trim().slice(0, 2000)}`;
+      auditLog({ type: 'github.secret', summary: `${name} set on ${repo}` });
+      return `Secret ${name} is set on ${repo}. The value went straight from the secure form to GitHub — I never saw it.`;
+    }
+
+    case 'schedule_followup': {
+      const action = String(input.action ?? 'create');
+      if (action === 'list') {
+        const items = listFollowups();
+        if (!items.length) return 'No pending follow-ups.';
+        return items.map((f) => `${f.id} · [${f.projectName}] due ${f.dueAt} — ${f.task.slice(0, 140)}`).join('\n');
+      }
+      if (action === 'cancel') {
+        return cancelFollowup(String(input.id ?? '')) ? 'Follow-up cancelled.' : 'No follow-up with that id.';
+      }
+      const minutes = Number(input.delay_minutes);
+      if (!Number.isFinite(minutes)) return 'delay_minutes is required (1 to 10080).';
+      const out = scheduleFollowup(project.name, String(input.task ?? ''), Math.round(minutes * 60_000));
+      if (!out.ok) return out.error;
+      return `Follow-up ${out.followup.id} queued — I'll automatically continue this in ~${Math.round(minutes)} min (due ${out.followup.dueAt}). It fires while PlainOps is open; if the app is closed at that time, it runs shortly after the next launch.`;
     }
 
     case 'deploy_microservices': {
