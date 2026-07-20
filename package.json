@@ -13,7 +13,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "validate:blueprint": "node scripts/validate-blueprint.mjs",
-    "validate:all-blueprints": "node scripts/validate-all-blueprints.mjs",
+    "validate:all-blueprints": "tsx scripts/validate-all-blueprints.ts",
     "build": "node scripts/build-dist.mjs",
     "app:dev": "npm run build && electron .",
     "dist:win": "npm run build && electron-builder --win nsis",
