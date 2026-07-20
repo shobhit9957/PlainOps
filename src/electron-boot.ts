@@ -2,6 +2,9 @@ import type { AddressInfo } from 'node:net';
 import { loadConfig } from './config.js';
 import { createServer } from './server.js';
 import { startWatchers } from './cicd.js';
+import { initFollowups } from './followups.js';
+import { runTurn } from './agent/loop.js';
+import { isDemoMode } from './config.js';
 
 /**
  * Boot the PlainOps server inside the Electron main process and report the
@@ -12,6 +15,7 @@ export async function startServer(): Promise<number> {
   const cfg = loadConfig();
   const app = createServer();
   startWatchers();
+  if (!isDemoMode()) initFollowups((projectName, text) => runTurn(projectName, text));
   return new Promise((resolve, reject) => {
     const srv = app.listen(cfg.port, '127.0.0.1', () => resolve(cfg.port));
     srv.on('error', (e: NodeJS.ErrnoException) => {

@@ -17,6 +17,7 @@ import { getDailyCosts, putAppSecret, whoAmI } from './aws.js';
 import { runTurn, type InboundImage } from './agent/loop.js';
 import { explainError } from './errors.js';
 import { scrub } from './scrub.js';
+import { listFollowups, cancelFollowup } from './followups.js';
 import { startDemo, replayDemoChat } from './demo.js';
 
 const ALLOWED_IMAGE_TYPES: Record<string, InboundImage['mediaType']> = {
@@ -272,6 +273,14 @@ export function createServer() {
       emitBus({ type: 'chat.done', projectName });
     });
     res.json({ ok: true });
+  });
+
+  app.get('/api/followups', (_req, res) => {
+    res.json({ followups: listFollowups() });
+  });
+
+  app.post('/api/followups/:id/cancel', (req, res) => {
+    res.json({ ok: cancelFollowup(req.params.id) });
   });
 
   // Founder declined to provide a secret value — resolve the prompt as

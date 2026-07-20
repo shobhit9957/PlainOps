@@ -18,7 +18,7 @@ import { spawnSync } from 'node:child_process';
  * OFFICIAL installer actually uses on that platform.
  */
 
-export type KnownTool = 'aws' | 'gcloud' | 'az' | 'tofu' | 'terraform';
+export type KnownTool = 'aws' | 'gcloud' | 'az' | 'tofu' | 'terraform' | 'gh' | 'git';
 
 /** Candidate install locations per tool per platform (order = preference). */
 export function wellKnownLocations(
@@ -43,6 +43,8 @@ export function wellKnownLocations(
       ],
       tofu: [],
       terraform: [],
+      gh: ['C:\\Program Files\\GitHub CLI\\gh.exe', 'C:\\Program Files (x86)\\GitHub CLI\\gh.exe'],
+      git: ['C:\\Program Files\\Git\\cmd\\git.exe', 'C:\\Program Files\\Git\\bin\\git.exe'],
     };
     return table[tool];
   }
@@ -59,6 +61,8 @@ export function wellKnownLocations(
       az: ['/opt/homebrew/bin/az', '/usr/local/bin/az'],
       tofu: ['/opt/homebrew/bin/tofu', '/usr/local/bin/tofu'],
       terraform: ['/opt/homebrew/bin/terraform', '/usr/local/bin/terraform'],
+      gh: ['/opt/homebrew/bin/gh', '/usr/local/bin/gh'],
+      git: ['/usr/bin/git', '/opt/homebrew/bin/git', '/usr/local/bin/git'],
     };
     return table[tool];
   }
@@ -68,6 +72,8 @@ export function wellKnownLocations(
     az: ['/usr/bin/az', '/usr/local/bin/az'],
     tofu: ['/usr/local/bin/tofu', '/usr/bin/tofu'],
     terraform: ['/usr/local/bin/terraform', '/usr/bin/terraform'],
+    gh: ['/usr/bin/gh', '/usr/local/bin/gh'],
+    git: ['/usr/bin/git', '/usr/local/bin/git'],
   };
   return table[tool];
 }
