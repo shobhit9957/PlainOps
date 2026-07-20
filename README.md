@@ -99,18 +99,22 @@ machine.
 ## Honest status
 
 - **AWS paths are battle-tested** — static, container, serverless, and microservices have
-  all been deployed live, verified, and torn down on a real account.
-- **GCP and Azure paths are new**: every blueprint passes `tofu validate` and the full
-  pipeline is unit-tested, but they have not yet been proven against live GCP/Azure
-  accounts. First live runs may surface provider quirks — the diagnosis tool and honest
-  error surfaces are there for exactly that.
+  all been deployed live, verified, and torn down on a real account, including the day-2
+  ladder (safe deploys with auto-revert, migrations, rollback, DR drills, chaos recovery).
+- **GCP paths are live-proven** — app, serverless, and microservices have each been
+  deployed to a real GCP project, verified over HTTP, exercised for day-2 (diagnosis,
+  chaos, teardown), and destroyed clean.
+- **Azure paths are validated, not yet live-proven**: every blueprint passes
+  `tofu validate`, the pipeline is unit-tested, and all CLI calls are syntax-verified —
+  but no real subscription has run them end-to-end yet. First live runs may surface
+  provider quirks; the diagnosis tool and honest error surfaces are there for exactly that.
 - GCP/Azure **billing actuals** aren't wired yet (estimates + on-demand CLI lookups are).
 - Static-site hosting is AWS-only for now.
 
 ## Develop
 
 ```bash
-npm test                     # vitest — 29 files, 179 tests
+npm test                     # vitest — 32 files, 229 tests
 npm run typecheck
 npm run validate:all-blueprints   # tofu-validates all 9 blueprints
 npm run build                # compile + assets for the desktop shell
@@ -118,5 +122,10 @@ npm run dist:win             # Windows installer (NSIS) into release/
 ```
 
 Architecture, security details, and failure modes: [ARCHITECTURE.md](ARCHITECTURE.md) ·
-[SECURITY.md](SECURITY.md) · [TROUBLESHOOTING.md](TROUBLESHOOTING.md) · agents start at
-[CLAUDE.md](CLAUDE.md).
+[SECURITY.md](SECURITY.md) · [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
+## License
+
+Source-available — see [LICENSE.md](LICENSE.md). The code is public so you can audit
+exactly what runs on your machine and touches your cloud credentials; commercial use
+funds its maintenance.

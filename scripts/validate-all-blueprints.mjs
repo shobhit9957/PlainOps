@@ -15,10 +15,9 @@ function resolveTofu() {
     const r = spawnSync(process.platform === 'win32' ? 'where' : 'which', [name], { encoding: 'utf8' });
     if (r.status === 0 && r.stdout.trim()) return r.stdout.trim().split(/\r?\n/)[0];
   }
-  for (const dir of [path.join(os.homedir(), '.plainops', 'bin'), path.join(os.homedir(), '.firstmate', 'bin')]) {
-    const p = path.join(dir, process.platform === 'win32' ? 'tofu.exe' : 'tofu');
-    if (fs.existsSync(p)) return p;
-  }
+  const dir = path.join(os.homedir(), '.plainops', 'bin');
+  const p = path.join(dir, process.platform === 'win32' ? 'tofu.exe' : 'tofu');
+  if (fs.existsSync(p)) return p;
   throw new Error('No tofu/terraform binary found.');
 }
 

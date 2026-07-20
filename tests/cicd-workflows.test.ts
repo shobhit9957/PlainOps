@@ -39,7 +39,7 @@ async function gen(p: Project): Promise<{ wf: Wf; plan: { yaml: string; secretsN
 describe('generated GitHub Actions workflows parse and target real resources', () => {
   it('AWS container app', async () => {
     const { wf, plan } = await gen(proj({
-      accountId: '659587495971',
+      accountId: '123456789012',
       outputs: { ecr_repo_url: '659.dkr.ecr.ap-south-1.amazonaws.com/po-shop', cluster_name: 'po-shop', service_name: 'po-shop' },
     }));
     expect(wf.on.push.branches).toEqual(['main']);

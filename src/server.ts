@@ -15,6 +15,8 @@ import { setSecret } from './vault.js';
 import { analyzeRepo } from './analyzer.js';
 import { getDailyCosts, putAppSecret, whoAmI } from './aws.js';
 import { runTurn, type InboundImage } from './agent/loop.js';
+import { explainError } from './errors.js';
+import { scrub } from './scrub.js';
 import { startDemo, replayDemoChat } from './demo.js';
 
 const ALLOWED_IMAGE_TYPES: Record<string, InboundImage['mediaType']> = {
@@ -266,7 +268,7 @@ export function createServer() {
     const parsedImages = parseInboundImages(images);
     // Fire and forget — progress streams over SSE.
     runTurn(projectName, String(text ?? ''), parsedImages).catch((e) => {
-      emitBus({ type: 'chat.message', projectName, text: `Something went wrong: ${(e as Error).message}` });
+      emitBus({ type: 'chat.message', projectName, text: scrub(explainError(e)) });
       emitBus({ type: 'chat.done', projectName });
     });
     res.json({ ok: true });

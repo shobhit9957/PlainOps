@@ -18,3 +18,4 @@ coverage/
 release/
 build/
 .gauntlet-workdir/monolith/
+.claude/

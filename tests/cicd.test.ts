@@ -16,10 +16,10 @@ describe('generateWorkflow', () => {
   it('container project → ECR build + ECS roll with the real resource names', async () => {
     const { generateWorkflow } = await import('../src/cicd.js');
     const plan = generateWorkflow(base({
-      accountId: '659587495971',
-      outputs: { ecr_repo_url: '659587495971.dkr.ecr.ap-south-1.amazonaws.com/po-demo', cluster_name: 'po-demo', service_name: 'po-demo', app_url: 'http://x' },
+      accountId: '123456789012',
+      outputs: { ecr_repo_url: '123456789012.dkr.ecr.ap-south-1.amazonaws.com/po-demo', cluster_name: 'po-demo', service_name: 'po-demo', app_url: 'http://x' },
     }));
-    expect(plan.yaml).toContain('659587495971.dkr.ecr.ap-south-1.amazonaws.com/po-demo:live');
+    expect(plan.yaml).toContain('123456789012.dkr.ecr.ap-south-1.amazonaws.com/po-demo:live');
     expect(plan.yaml).toContain('aws ecs update-service --cluster po-demo --service po-demo');
     expect(plan.yaml).toContain('aws-region: ap-south-1');
     expect(plan.secretsNeeded).toEqual(['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']);
@@ -41,7 +41,7 @@ describe('generateWorkflow', () => {
   it('microservices → parallel matrix over the real service list', async () => {
     const { generateWorkflow } = await import('../src/cicd.js');
     const plan = generateWorkflow(base({
-      accountId: '659587495971',
+      accountId: '123456789012',
       outputs: { cluster_name: 'po-demo', service_names: JSON.stringify({ gateway: 'gateway', users: 'users', cart: 'cart' }), app_url: 'x' },
     }));
     expect(plan.yaml).toContain('service: [gateway, users, cart]');

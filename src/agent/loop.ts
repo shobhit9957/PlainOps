@@ -5,6 +5,7 @@ import { loadConfig } from '../config.js';
 import { systemPrompt } from './prompt.js';
 import { TOOL_DEFINITIONS, dispatchTool, type ToolContext } from './tools.js';
 import { scrub } from '../scrub.js';
+import { explainError } from '../errors.js';
 import { auditLog } from '../audit.js';
 import { emitBus } from '../bus.js';
 
@@ -84,7 +85,7 @@ async function processProject(projectName: string): Promise<void> {
       try {
         await processOneMessage(projectName, next.text, next.images, next.ctx);
       } catch (e) {
-        emitBus({ type: 'chat.message', projectName, text: `Something went wrong: ${scrub((e as Error).message)}` });
+        emitBus({ type: 'chat.message', projectName, text: scrub(explainError(e)) });
       } finally {
         next.resolve();
       }

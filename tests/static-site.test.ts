@@ -21,8 +21,8 @@ beforeEach(() => s3.reset());
 
 describe('staticBucketName', () => {
   it('is lowercase, prefixed, and S3-legal length', () => {
-    const name = staticBucketName('My-Store', '659587495971');
-    expect(name).toBe('plainops-site-my-store-659587495971');
+    const name = staticBucketName('My-Store', '123456789012');
+    expect(name).toBe('plainops-site-my-store-123456789012');
     expect(name.length).toBeLessThanOrEqual(63);
     expect(name).toMatch(/^[a-z0-9-]+$/);
   });
