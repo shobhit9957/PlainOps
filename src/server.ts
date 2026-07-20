@@ -97,7 +97,8 @@ export function createServer() {
       projects: loadState().projects,
       config: {
         model: ai.model,
-        hasKey: aiReady(cfg).ok,
+        // Demo mode never needs a key — that's its whole promise.
+        hasKey: isDemoMode() || aiReady(cfg).ok,
         provider: ai.provider.id,
         providerLabel: ai.provider.label,
         baseUrl: ai.provider.editableBaseUrl ? (ai.baseUrl ?? '') : undefined,
