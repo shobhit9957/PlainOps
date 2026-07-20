@@ -70,10 +70,12 @@ Plus, on every cloud:
   curl -fsSL https://raw.githubusercontent.com/shobhit9957/PlainOps/main/scripts/install-mac.sh | bash
   ```
 
-  Prefer the `.dmg`? The build is ad-hoc signed but not yet notarized with Apple, so
-  macOS may call a browser-downloaded copy "damaged" — fix with
-  `xattr -cr /Applications/PlainOps.app`, or System Settings → Privacy & Security →
-  **Open Anyway**.
+  Prefer the `.dmg`? The build is signed (ad-hoc) but not yet Apple-notarized, so on a
+  browser download macOS shows *"Apple could not verify PlainOps is free of malware"*.
+  That's Gatekeeper's standard unnotarized-app block, not an infection report. Click
+  **Done** (not Move to Bin) → System Settings → Privacy & Security → **Open Anyway**
+  (the button appears there for about an hour) → open the app again and confirm.
+  Alternative that skips every dialog: `xattr -cr /Applications/PlainOps.app`.
 
 **From source:**
 
