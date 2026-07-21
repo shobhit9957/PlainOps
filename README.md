@@ -62,7 +62,13 @@ Plus, on every cloud:
 
 **Desktop app (recommended):** grab it from [Releases](https://github.com/shobhit9957/PlainOps/releases/latest).
 
-- **Windows 10/11:** run `PlainOps-Setup.exe`.
+- **Windows 10/11:** run `PlainOps-Setup.exe` (SmartScreen will say "unrecognized app"
+  until we're code-signed — More info → Run anyway), or paste this in PowerShell for a
+  no-dialog install:
+
+  ```powershell
+  powershell -c "irm https://raw.githubusercontent.com/shobhit9957/PlainOps/main/scripts/install-windows.ps1 | iex"
+  ```
 - **macOS 11+ (Apple Silicon & Intel):** paste this in Terminal — it picks the right
   build and installs with no Gatekeeper warning (terminal downloads aren't quarantined):
 
