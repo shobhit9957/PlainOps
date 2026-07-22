@@ -110,6 +110,97 @@ describe('OpenAI-compatible conversion — Anthropic-format history in, standard
   });
 });
 
+describe('reasoning-model + tools compatibility (every OpenAI-compatible provider)', () => {
+  // Reasoning models (OpenAI gpt-5.x, the same models proxied via OpenRouter,
+  // etc.) reject function tools + their default reasoning_effort on
+  // /v1/chat/completions. The server's own remedy is reasoning_effort:'none'.
+  // PlainOps must recover automatically — it drives EVERYTHING through tools.
+  const REASONING_400 = Object.assign(
+    new Error(
+      "Function tools with reasoning_effort are not supported for gpt-5.6-sol in " +
+        "/v1/chat/completions. To use function tools, use /v1/responses or set reasoning_effort to 'none'.",
+    ),
+    { status: 400 },
+  );
+
+  function fakeClient(streamFactory: (params: Record<string, unknown>) => unknown) {
+    const calls: Array<Record<string, unknown>> = [];
+    const client = {
+      chat: {
+        completions: {
+          stream(params: Record<string, unknown>) {
+            calls.push(params);
+            return streamFactory(params);
+          },
+        },
+      },
+    };
+    return { client, calls };
+  }
+  const openaiAI = () => ({
+    provider: { id: 'openai', label: 'OpenAI', kind: 'openai' as const, defaultModel: 'gpt-5.1', tokenParam: 'max_completion_tokens' as const },
+    apiKey: 'k',
+    model: 'gpt-5.6-sol',
+    baseUrl: 'https://api.openai.com/v1',
+  });
+
+  it('detects the reasoning_effort/tools 400 the server tells us to fix with none', async () => {
+    const { isReasoningToolConflict } = await import('../src/agent/openaicompat.js');
+    expect(isReasoningToolConflict(REASONING_400)).toBe(true);
+    // Nested SDK error body shape must work too.
+    expect(isReasoningToolConflict({ status: 400, error: { message: "set reasoning_effort to 'none'" } })).toBe(true);
+    // An unrelated 400 must NOT trigger the retry.
+    expect(isReasoningToolConflict(Object.assign(new Error('400 messages: array too long'), { status: 400 }))).toBe(false);
+  });
+
+  it('transparently retries once with reasoning_effort:"none", still sending the tools', async () => {
+    const { runOpenAiCompatTurn, setOpenAiClientForTests } = await import('../src/agent/openaicompat.js');
+    const { client, calls } = fakeClient((_params) =>
+      calls.length === 1
+        ? { on() {}, finalChatCompletion: () => Promise.reject(REASONING_400) }
+        : { on() {}, finalChatCompletion: () => Promise.resolve({ choices: [{ message: { content: 'All healthy.' } }] }) },
+    );
+    setOpenAiClientForTests(client);
+    try {
+      const r = await runOpenAiCompatTurn({
+        ai: openaiAI() as never,
+        system: 'sys',
+        history: [{ role: 'user', content: 'is my project healthy?' }],
+        tools: [{ name: 'run_diagnosis', description: 'x', input_schema: { type: 'object', properties: {} } }] as unknown as Anthropic.Tool[],
+        onDelta() {},
+      });
+      expect(calls).toHaveLength(2);
+      expect(calls[0].reasoning_effort).toBeUndefined();
+      expect(calls[1].reasoning_effort).toBe('none');
+      expect(calls[1].tools).toBeDefined(); // tools still sent — that's the point
+      expect(r.text).toBe('All healthy.');
+    } finally {
+      setOpenAiClientForTests(null);
+    }
+  });
+
+  it('does not retry unrelated 400s — surfaces them for the loop to explain', async () => {
+    const { runOpenAiCompatTurn, setOpenAiClientForTests } = await import('../src/agent/openaicompat.js');
+    const otherErr = Object.assign(new Error('400 model not found'), { status: 400 });
+    const { client, calls } = fakeClient(() => ({ on() {}, finalChatCompletion: () => Promise.reject(otherErr) }));
+    setOpenAiClientForTests(client);
+    try {
+      await expect(
+        runOpenAiCompatTurn({
+          ai: openaiAI() as never,
+          system: 'sys',
+          history: [{ role: 'user', content: 'hi' }],
+          tools: [] as unknown as Anthropic.Tool[],
+          onDelta() {},
+        }),
+      ).rejects.toThrow('model not found');
+      expect(calls).toHaveLength(1); // no retry
+    } finally {
+      setOpenAiClientForTests(null);
+    }
+  });
+});
+
 describe('provider-aware error wording', () => {
   it('names the active provider and its host instead of Anthropic', async () => {
     const { explainError } = await import('../src/errors.js');
@@ -130,5 +221,21 @@ describe('provider-aware error wording', () => {
     );
     expect(net).toContain('api.moonshot.ai');
     expect(net).not.toContain('api.anthropic.com');
+  });
+
+  it('a reasoning-model tool conflict tells the user to switch models, not "PlainOps bug"', async () => {
+    const { explainError } = await import('../src/errors.js');
+    const msg = explainError(
+      {
+        status: 400,
+        message:
+          "Function tools with reasoning_effort are not supported for gpt-5.6-sol in /v1/chat/completions. " +
+          "To use function tools, use /v1/responses or set reasoning_effort to 'none'.",
+      },
+      { label: 'OpenAI', keysUrl: 'https://platform.openai.com/api-keys', host: 'api.openai.com' },
+    );
+    expect(msg.toLowerCase()).toContain('reasoning');
+    expect(msg).toMatch(/switch|gpt-5\.1|different model/i);
+    expect(msg).not.toContain('usually a PlainOps bug');
   });
 });
