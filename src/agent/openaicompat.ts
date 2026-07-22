@@ -160,6 +160,28 @@ export function fromOpenAiMessage(message: {
 
 // ------------------------------------------------------------------ runner
 
+/** Pull the human-readable text out of any error shape: a plain string, an
+ * SDK error's `.message`, or a nested `.error.message` body. */
+function errorText(err: unknown): string {
+  if (typeof err === 'string') return err;
+  if (!err || typeof err !== 'object') return '';
+  const e = err as { message?: string; error?: { message?: string } };
+  return [e.message, e.error?.message].filter(Boolean).join(' ');
+}
+
+/**
+ * Reasoning models (OpenAI's gpt-5.x, the same models proxied through
+ * OpenRouter, and their kin) refuse function tools alongside their default
+ * reasoning_effort on /v1/chat/completions. The API's own remedy is to set
+ * reasoning_effort to 'none'. PlainOps drives everything through tools, so it
+ * must recover automatically. We key off the server's error text — not a
+ * hard-coded model list — so brand-new reasoning models just work.
+ */
+export function isReasoningToolConflict(err: unknown): boolean {
+  const t = errorText(err).toLowerCase();
+  return t.includes('reasoning_effort') && t.includes('none');
+}
+
 export async function runOpenAiCompatTurn(opts: {
   ai: ActiveAI;
   system: string;
@@ -168,21 +190,37 @@ export async function runOpenAiCompatTurn(opts: {
   onDelta: (text: string) => void;
 }): Promise<CompatTurn> {
   const client = getOpenAiClient(opts.ai);
+  type StreamParams = Parameters<typeof client.chat.completions.stream>[0];
   const tokenLimit =
     opts.ai.provider.tokenParam === 'max_completion_tokens'
       ? { max_completion_tokens: 16000 }
       : { max_tokens: 16000 };
-
-  const stream = client.chat.completions.stream({
+  const base: StreamParams = {
     model: opts.ai.model,
     messages: toOpenAiMessages(opts.system, opts.history),
     tools: toOpenAiTools(opts.tools),
     ...tokenLimit,
-  });
-  stream.on('content', (delta: string) => {
-    if (delta) opts.onDelta(delta);
-  });
-  const completion = await stream.finalChatCompletion();
+  };
+
+  // One attempt. A rejected request (e.g. a 400) fails before any content
+  // streams, so no partial deltas leak — a retry always starts clean.
+  const attempt = (params: StreamParams) => {
+    const stream = client.chat.completions.stream(params);
+    stream.on('content', (delta: string) => {
+      if (delta) opts.onDelta(delta);
+    });
+    return stream.finalChatCompletion();
+  };
+
+  let completion: Awaited<ReturnType<typeof attempt>>;
+  try {
+    completion = await attempt(base);
+  } catch (err) {
+    if (!isReasoningToolConflict(err)) throw err;
+    // 'none' isn't in every SDK build's ReasoningEffort union yet — the server
+    // explicitly asked for it, so set it past the types and retry once.
+    completion = await attempt({ ...base, reasoning_effort: 'none' } as unknown as StreamParams);
+  }
   const message = completion.choices[0]?.message;
   if (!message) throw new Error(`${opts.ai.provider.label} returned no choices — check the model name in Settings.`);
   return fromOpenAiMessage(message);

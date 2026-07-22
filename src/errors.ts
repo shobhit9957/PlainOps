@@ -138,6 +138,16 @@ export function explainError(err: unknown, hint?: ProviderHint): string {
     );
   }
 
+  if (allText.includes('reasoning_effort') || (status === 400 && allText.includes('/v1/responses'))) {
+    return (
+      `The model you picked is a reasoning model, and ${label} won’t let it use PlainOps’s tools with reasoning left on. PlainOps automatically retried with reasoning turned off — if you’re still seeing this, that model can’t do tool-calling here, and PlainOps needs tools for everything it does.\n\n` +
+      fix(
+        `open ${SETTINGS_PATH} and switch to a tool-capable model — ${isAnthropic ? 'e.g. claude-opus-4-8' : 'e.g. OpenAI gpt-5.1 or gpt-4.1, or a different model that supports function calling'} — or switch back to Claude (Anthropic). Then send your message again.`,
+      ) +
+      tail
+    );
+  }
+
   if (status === 400 || body.type === 'invalid_request_error') {
     return (
       'The AI model rejected the request as malformed. This is usually a PlainOps bug rather than something you did.\n\n' +
