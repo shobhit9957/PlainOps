@@ -309,7 +309,7 @@ export function createServer() {
       if (!ready.ok) return res.status(400).json({ error: ready.reason });
     }
     if (isDemoMode()) {
-      replayDemoChat(String(text ?? ''));
+      replayDemoChat();
       return res.json({ ok: true });
     }
     const parsedImages = parseInboundImages(images);

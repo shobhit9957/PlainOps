@@ -4,8 +4,8 @@
     {
       "name": "plainops-demo",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["cross-env", "PLAINOPS_DEMO=1", "PLAINOPS_NO_OPEN=1", "PLAINOPS_HOME=.plainops-demo", "tsx", "src/index.ts"],
-      "port": 7717
+      "runtimeArgs": ["cross-env", "PLAINOPS_DEMO=1", "PLAINOPS_NO_OPEN=1", "PLAINOPS_HOME=.plainops-demo", "PLAINOPS_PORT=7718", "tsx", "src/index.ts"],
+      "port": 7718
     }
   ]
 }

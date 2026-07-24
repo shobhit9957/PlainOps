@@ -55,13 +55,11 @@ export function startDemo(): void {
   // instead expose a trigger the UI calls on load via /api/state (demo:true).
 }
 
-/** Called by a demo endpoint to replay a scripted conversation. */
-export function replayDemoChat(userText = ''): void {
+/** Called by a demo endpoint to replay a scripted conversation. The user's own
+ *  message is NOT re-emitted — the dashboard renders it locally on submit. */
+export function replayDemoChat(): void {
   const project = 'acme-store';
   const steps: Array<() => void> = [
-    () => {
-      if (userText) emitBus({ type: 'chat.usermsg', projectName: project, text: userText });
-    },
     () => emitBus({ type: 'chat.message', projectName: project, text: "On it. I analyzed your Next.js store: it needs a database (found a DATABASE_URL reference) and a Stripe key. Here's the full plan and the monthly cost — nothing is created until you approve." }),
     () => emitBus({ type: 'chat.tool', projectName: project, tool: 'propose_infrastructure' }),
     () =>
