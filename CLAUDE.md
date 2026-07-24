@@ -24,7 +24,7 @@ Not a SaaS. There is no PLAINOPS server. Everything runs on localhost.
 npm install
 npm start            # dashboard at http://localhost:7717 (needs cloud creds + Anthropic key)
 npm run demo         # scripted UI walkthrough, no cloud and no API key needed
-npm test             # vitest — 31 files, 218 tests
+npm test             # vitest — 39 files, 282 tests
 npm run typecheck    # tsc --noEmit
 npm run validate:all-blueprints   # tofu validate × 9 (AWS/GCP/Azure)
 npm run build && npx electron .   # run the desktop shell from source
@@ -46,7 +46,7 @@ web/ (dashboard, SSE)  ──HTTP──►  src/server.ts
                              per-project queue        model: claude-opus-4-8
                                       │                MAX_TURNS 12
                                       ▼
-                            src/agent/tools.ts  (42 tools)
+                            src/agent/tools.ts  (46 tools)
                                       │
                     ┌─────────────────┼──────────────────┐
                     ▼                 ▼                  ▼
@@ -67,7 +67,7 @@ Full detail: **[ARCHITECTURE.md](ARCHITECTURE.md)**. Security model:
 | `src/index.ts` | CLI entry: banner, preflight, Express listen, open browser |
 | `src/server.ts` | Dashboard API + SSE `/api/events`; serves `web/` |
 | `src/agent/loop.ts` | Per-project message **queue** + tool loop; scrubs every delta |
-| `src/agent/tools.ts` | 15 tool schemas + dispatch; scrubs every tool result |
+| `src/agent/tools.ts` | 46 tool schemas + dispatch; scrubs every tool result |
 | `src/agent/prompt.ts` | System prompt (deploy-path rules, hard safety rules) |
 | `src/agent/client.ts` | Lazy Anthropic client; injectable for tests |
 | `src/gate.ts` | Human-approval gate + global `withActionLock` |

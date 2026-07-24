@@ -51,11 +51,26 @@ function writeAll(map: Record<string, string>): void {
 
 const NAME_RE = /^[A-Z][A-Z0-9_]*$/;
 
+/**
+ * Shortest value the scrubber will redact. Below this, literal replacement would
+ * mangle ordinary text ("abc" appears everywhere), so scrub() skips it — and a
+ * value scrub() skips is one that can leak into the model, the event stream and
+ * the audit log forever. Refuse to store it rather than store something we can
+ * never redact. Kept here (not in scrub.ts) so scrub can import it without a cycle.
+ */
+export const MIN_SECRET_LENGTH = 6;
+
 export function setSecret(name: string, value: string): void {
   if (!NAME_RE.test(name)) {
     throw new Error(`Invalid secret name "${name}" (use UPPER_SNAKE_CASE)`);
   }
   if (!value) throw new Error('Secret value must not be empty');
+  if (value.length < MIN_SECRET_LENGTH) {
+    throw new Error(
+      `Secret "${name}" is too short (min ${MIN_SECRET_LENGTH} characters) — ` +
+        'shorter values cannot be safely redacted from logs and model context.',
+    );
+  }
   const map = readAll();
   map[name] = value;
   writeAll(map);

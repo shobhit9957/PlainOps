@@ -88,6 +88,44 @@ describe('classifyCloud — az', () => {
   });
 });
 
+// The classifier is the ONLY thing between the model and the approval gate for
+// arbitrary CLI calls, and the model controls every token in the args array.
+// A destructive command that classifies as `read` runs with NO human click.
+describe('classifyCloud — a resource NAME must never downgrade a mutation to read', () => {
+  it('az: a resource literally named after a read verb still requires approval', () => {
+    expect(classifyCloud('azure', ['group', 'delete', '--name', 'test', '--yes']).kind).toBe('mutate');
+    expect(classifyCloud('azure', ['group', 'delete', '--name', 'list', '--yes']).kind).toBe('mutate');
+    expect(classifyCloud('azure', ['containerapp', 'delete', '--name', 'get-orders', '--resource-group', 'rg']).kind).toBe('mutate');
+    expect(classifyCloud('azure', ['containerapp', 'update', '--name', 'show-cart']).kind).toBe('mutate');
+    expect(classifyCloud('azure', ['storage', 'account', 'delete', '--name', 'export-data']).kind).toBe('mutate');
+  });
+
+  it('gcloud: a resource literally named after a read verb still requires approval', () => {
+    expect(classifyCloud('gcp', ['compute', 'instances', 'delete', 'list']).kind).toBe('mutate');
+    expect(classifyCloud('gcp', ['compute', 'instances', 'delete', 'test-vm', '--zone', 'us-central1-a']).kind).toBe('mutate');
+    expect(classifyCloud('gcp', ['run', 'services', 'delete', 'get-orders', '--region', 'us-central1']).kind).toBe('mutate');
+    expect(classifyCloud('gcp', ['projects', 'delete', 'describe-me']).kind).toBe('mutate');
+  });
+
+  it('reads are still reads when their arguments look like nothing in particular', () => {
+    expect(classifyCloud('azure', ['containerapp', 'list', '--resource-group', 'delete-me']).kind).toBe('read');
+    expect(classifyCloud('gcp', ['run', 'services', 'describe', 'delete-me', '--region', 'us-central1']).kind).toBe('read');
+  });
+});
+
+describe('classifyCloud — a leading global flag must not bypass the deny-list', () => {
+  it('az still denies credential commands behind a global flag', () => {
+    expect(classifyCloud('azure', ['--output', 'json', 'keyvault', 'secret', 'show', '--name', 's', '--vault-name', 'v']).kind).toBe('denied');
+    expect(classifyCloud('azure', ['--output', 'json', 'account', 'get-access-token']).kind).toBe('denied');
+    expect(classifyCloud('azure', ['--subscription', 'sub-1', 'storage', 'account', 'keys', 'list', '--account-name', 'a']).kind).toBe('denied');
+  });
+
+  it('gcloud still denies credential commands behind a global flag', () => {
+    expect(classifyCloud('gcp', ['--project', 'p', 'auth', 'print-access-token']).kind).toBe('denied');
+    expect(classifyCloud('gcp', ['--format', 'json', 'secrets', 'versions', 'access', 'latest', '--secret', 'DB_URL']).kind).toBe('denied');
+  });
+});
+
 describe('quoteForCmdShell (Windows .cmd shim safety)', () => {
   it('passes plain args through untouched', async () => {
     const { quoteForCmdShell } = await import('../src/clouds/cloudcli.js');

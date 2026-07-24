@@ -27,13 +27,60 @@ const READ_PREFIXES = [
 ];
 
 // Commands that would leak credentials/secrets into the model — never run these here.
+// NOTE: several of these begin with `get-` and would otherwise match READ_PREFIXES
+// and run with no approval at all. The deny-list is checked first for that reason.
 const DENIED = new Set([
   'get-secret-value',
   'get-password-data',
   'create-access-key',
   'create-login-profile',
   'update-login-profile',
+  // Print live, usable credentials.
+  'get-login-password',        // ecr — registry password
+  'get-authorization-token',   // ecr / codeartifact
+  'get-session-token',         // sts
+  'get-federation-token',      // sts
+  'assume-role',               // sts — returns AccessKeyId/SecretAccessKey/SessionToken
+  'assume-role-with-saml',
+  'assume-role-with-web-identity',
+  'get-role-credentials',      // sso
+  'get-cluster-credentials',   // redshift
+  'generate-db-auth-token',    // rds
+  'get-instance-access-details', // lightsail — returns private key
+  'create-key-pair',           // ec2 — returns the private key material
+  'get-credentials-for-identity', // cognito-identity
+  'get-open-id-token',
+  'create-service-specific-credential', // iam
+  'reset-service-specific-credential',
+  // KMS plaintext.
+  'decrypt',
+  'generate-data-key',
+  'generate-random',
 ]);
+
+// AWS global options that consume the NEXT argv token as their value. The model
+// controls argument order, so `aws ec2 --region get-x terminate-instances` must
+// not slide "get-x" into the operation slot and downgrade a mutation to a read.
+const GLOBAL_VALUE_FLAGS = new Set([
+  '--region', '--profile', '--output', '--endpoint-url', '--query',
+  '--ca-bundle', '--cli-read-timeout', '--cli-connect-timeout',
+  '--color', '--cli-binary-format',
+]);
+
+/** argv minus flags and the values those flags consume. */
+export function commandPositionals(args: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (!a.startsWith('-')) {
+      out.push(a);
+      continue;
+    }
+    if (a.includes('=')) continue;       // --flag=value: self-contained
+    if (GLOBAL_VALUE_FLAGS.has(a)) i++;  // --flag value: skip the value too
+  }
+  return out;
+}
 
 export interface CommandClass {
   kind: 'read' | 'mutate' | 'denied';
@@ -43,7 +90,7 @@ export interface CommandClass {
 
 /** Classify an AWS CLI invocation (args after `aws`). */
 export function classifyAws(args: string[]): CommandClass {
-  const positional = args.filter((a) => !a.startsWith('-'));
+  const positional = commandPositionals(args);
   const service = positional[0] ?? '';
   const operation = positional[1] ?? '';
 
@@ -66,7 +113,7 @@ export function classifyAws(args: string[]): CommandClass {
 export function withRegion(args: string[], region: string): string[] {
   if (args.includes('--region') || args.some((a) => a.startsWith('--region='))) return args;
   // Don't force a region on genuinely global services.
-  const positional = args.filter((a) => !a.startsWith('-'));
+  const positional = commandPositionals(args);
   const globalServices = new Set(['s3', 's3api', 'iam', 'sts', 'route53', 'cloudfront', 'organizations', 'budgets']);
   if (globalServices.has(positional[0] ?? '')) return args;
   return [...args, '--region', region];

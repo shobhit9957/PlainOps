@@ -33,7 +33,7 @@ One Node process. No database, no queue, no daemon.
 │                              │                                     │
 │                    ┌─────────┴─────────┐                           │
 │                    ▼                   ▼                           │
-│              src/gate.ts        src/agent/tools.ts (42 tools)      │
+│              src/gate.ts        src/agent/tools.ts (46 tools)      │
 │           approval + lock              │                           │
 │                                        ▼                           │
 │         orchestrator · tofu · aws · awscli · vault · scrub         │
@@ -68,10 +68,13 @@ API with a 400, killing an in-flight deploy. The queue makes that structurally
 impossible. `chat.busy` / `chat.queued` / `chat.idle` events drive the dashboard's
 "Working…" state so the UI never offers a Run button during a deploy.
 
-Every streamed delta and assistant message passes through `scrub()` before it
-reaches the bus.
+Streamed deltas pass through a **stream scrubber** (`createDeltaScrubber`) rather
+than a per-chunk `scrub()`: a secret split across two chunks matches neither half,
+so the scrubber holds back a tail long enough to see any value whole before
+emitting it. `emitBus()` then scrubs every event again at the bus itself, so no
+subscriber — SSE included — can receive an unscrubbed string.
 
-## The tools (42)
+## The tools (46)
 
 The original 15 below are the deploy core. The operations layer added on top:
 GCP/Azure deploys + gated CLIs (`deploy_gcp`, `deploy_azure`, `gcloud_cli`,
@@ -121,18 +124,33 @@ Every tool result is passed through `scrub()` before returning to the model.
   prompt-injection payload hidden in a user's repository cannot approve itself.
 - `withActionLock()` serializes mutating pipelines so two deploys can't interleave.
 
-**Known nuance:** `aws_cli` is gated but is *not* wrapped in `withActionLock`, so an
-approved mutating CLI command can run concurrently with a deploy.
+An approved *mutating* CLI command (`aws_cli`, `gcloud_cli`, `az_cli`) now runs
+inside `withActionLock` too — it is a mutating pipeline like any other and must not
+interleave with an in-flight `tofu apply`. Read-classified commands skip the lock
+and run immediately.
 
 ## Raw AWS access (`src/awscli.ts`)
 
 So the agent can do things no blueprint covers, without becoming a blank cheque.
-`classifyAws(args)` reads `positional[0]` as service and `positional[1]` as operation:
+`classifyAws(args)` reads `positional[0]` as service and `positional[1]` as
+operation — where the positionals come from `commandPositionals()`, which strips
+flags **and the values that value-taking global flags consume**. Without that,
+`aws --region us-east-1 secretsmanager get-secret-value` puts `us-east-1` in the
+service slot and `secretsmanager` in the operation slot, sliding a denied command
+past the deny-list; and `aws ec2 --region get-x terminate-instances` reads `get-x`
+as the operation and downgrades a termination to a no-approval read. The model
+chooses the argument order, so ordering cannot be trusted.
 
-- **denied** — `get-secret-value`, `get-password-data`, `create-access-key`,
-  `create-login-profile`, `update-login-profile`, and `get-parameter(s)` with
-  `--with-decryption`. These are refused outright; they are the commands that would
-  hand the model a credential.
+- **denied** — the commands that would hand the model a usable credential:
+  `get-secret-value`, `get-password-data`, `create-access-key`,
+  `create-login-profile`, `update-login-profile`, `get-parameter(s)` with
+  `--with-decryption`, plus every credential-*printing* call that would otherwise
+  match the `get-` read prefix and run with no approval at all —
+  `ecr get-login-password`, `sts get-session-token` / `assume-role*` /
+  `get-federation-token`, `sso get-role-credentials`,
+  `redshift get-cluster-credentials`, `rds generate-db-auth-token`,
+  `lightsail get-instance-access-details`, `ec2 create-key-pair`, `kms decrypt` /
+  `generate-data-key`, and the Cognito token calls.
 - **read** — operation matches a read prefix (`describe`, `list`, `get`, `head`,
   `query`, `scan`, `search`, `lookup`, `batch-get`, `select`, `view`, `count`,
   `preview`, `estimate`, `test`, `validate`, `simulate`, `filter`, `check`). Runs
@@ -155,10 +173,16 @@ Three modules cooperate:
   `vault.enc` stores `{iv, tag, data}` with a 12-byte random IV. Names must match
   `/^[A-Z][A-Z0-9_]*$/`. `_allSecretsForScrubbing()` is the only full-map accessor
   and is never exposed over HTTP.
-- **`src/scrub.ts`** — reads the vault map, keeps values ≥6 chars, sorts
-  **longest-first** (so an overlapping shorter value can't leave a partial leak),
-  and literal-replaces each with `{{secret:NAME}}`. Also regex-masks
-  `AKIA[0-9A-Z]{16}`.
+- **`src/scrub.ts`** — reads the vault map, keeps values ≥`MIN_SECRET_LENGTH`
+  (6, enforced at `setSecret` so a value the scrubber could never redact is
+  refused at the door rather than stored), sorts **longest-first** (so an
+  overlapping shorter value can't leave a partial leak), and literal-replaces
+  each with `{{secret:NAME}}`. Then a defense-in-depth pass masks credential
+  *shapes* that were never vaulted and so cannot be matched literally: AWS access
+  key ids (`AKIA`/`ASIA`), `SecretAccessKey`/`SessionToken` values in JSON or
+  `key = value` form, GitHub `gh*_` tokens, Google `ya29.` tokens, and any PEM
+  private-key block. `createDeltaScrubber()` applies the same rules to a stream
+  without letting a value slip through a chunk boundary.
 - **`src/gate.ts`** — `requestSecretValue()` emits `secret.request` and resolves a
   **boolean**. The value never transits the gate.
 
@@ -230,6 +254,12 @@ requires a real **200–399**. A deploy that provisions cleanly but serves 503 i
 read the logs. `get_status` re-probes on every call so the agent cannot report
 "live" from stale state.
 
+**All four AWS paths gate on it, static included.** `deployStatic` used to set
+`status: 'live'` unconditionally — a bucket that exists but 404s (no `index.html`
+at the root) or 403s (public-read policy not yet effective) still handed the
+founder a URL called live. It now runs the same probe and refuses to mark live
+without a real 200–399.
+
 ## Cost estimation
 
 `src/estimator.ts` is a hand-maintained price table (currently `us-east-1` and
@@ -240,7 +270,7 @@ from Cost Explorer, filtered by the `plainops-project` tag.
 
 ## Testing
 
-29 files, 179 tests, `vitest`. AWS is faked with `aws-sdk-client-mock`; the
+39 files, 282 tests, `vitest`. AWS is faked with `aws-sdk-client-mock`; the
 orchestrator exposes an injectable `OrchestratorDeps`; the agent loop accepts a fake
 Anthropic client. Every test points `PLAINOPS_HOME` at a fresh temp dir.
 

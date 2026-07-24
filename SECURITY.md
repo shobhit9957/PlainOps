@@ -44,6 +44,16 @@ Say you need `DATABASE_URL = postgres://app:SuperSecret@db/prod` set on your ser
    loop in both directions — even if AWS echoes an env var back, the AI sees
    `{{secret:DATABASE_URL}}`.
 
+   Enforced at three chokepoints, so no caller can forget: `dispatchTool()` scrubs
+   every tool result, `auditLog()` scrubs both fields of every audit entry, and
+   `emitBus()` scrubs every event before any subscriber sees it — which is what
+   covers raw OpenTofu and cloud-CLI output streamed to the dashboard as
+   `deploy.log`. Streamed model deltas go through a stream scrubber so a value
+   split across two chunks is still caught. Beyond exact values, the scrubber also
+   masks credential *shapes* it has never seen before — AWS access key ids,
+   `SessionToken`/`SecretAccessKey` payloads, GitHub and Google tokens, and PEM
+   private keys.
+
 AI-generated secrets (like a new database password) are produced by a local random
 generator, vaulted, and handed to the AI as a placeholder — the model never writes
 your passwords.

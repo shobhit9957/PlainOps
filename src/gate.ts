@@ -95,6 +95,11 @@ export function resolveSecretPrompt(id: string, ok: boolean): { projectName: str
   return { projectName: entry.projectName, name: entry.name };
 }
 
+/** The secret NAME a pending prompt is waiting on, without resolving it. */
+export function pendingSecretName(id: string): string | null {
+  return pendingSecrets.get(id)?.name ?? null;
+}
+
 /** One mutating pipeline at a time — concurrent applies corrupt state. */
 let actionLock: Promise<unknown> = Promise.resolve();
 let lockBusy = false;

@@ -10,7 +10,7 @@ import { setSecret as vaultSet, listSecretNames } from './vault.js';
 import { configuredChannels, saveChannel } from './notify.js';
 import { readAudit } from './audit.js';
 import { onBus, emitBus } from './bus.js';
-import { resolveApproval, resolveSecretPrompt, listPendingActions } from './gate.js';
+import { resolveApproval, resolveSecretPrompt, listPendingActions, pendingSecretName } from './gate.js';
 import { setSecret } from './vault.js';
 import { analyzeRepo } from './analyzer.js';
 import { getDailyCosts, putAppSecret, whoAmI } from './aws.js';
@@ -347,6 +347,15 @@ export function createServer() {
   app.post('/api/secret', async (req, res) => {
     const { promptId, projectName, name, value } = req.body ?? {};
     if (!name || typeof value !== 'string' || !value) return res.status(400).json({ error: 'name and value required' });
+    // The agent asked for a specific secret NAME. Resolving that prompt while
+    // storing a different name would tell the agent "X is saved" when it isn't,
+    // and downstream steps would read a stale or absent X.
+    if (promptId) {
+      const expected = pendingSecretName(promptId);
+      if (expected && expected !== name) {
+        return res.status(400).json({ error: `this prompt is waiting for ${expected}, not ${name}` });
+      }
+    }
     try {
       setSecret(name, value);
       const project = getProject(projectName);

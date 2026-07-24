@@ -29,14 +29,57 @@ export function resolveCloudBin(cloud: CloudId): string {
   return (binCache[cloud] = found ?? name);
 }
 
-// Verbs that only read state. gcloud/az put the verb LAST among positionals
-// (`gcloud run services list`, `az containerapp show`), so we scan all
-// positionals rather than assuming a fixed slot.
+// Verbs that only read state. gcloud/az put the verb after the command group
+// (`gcloud run services list`, `az containerapp show`).
 const READ_VERBS = [
   'list', 'show', 'describe', 'get', 'check', 'validate', 'test', 'browse',
   'export', 'search', 'query', 'version', 'info', 'help', 'lookup', 'preview',
   'read', 'tail',
 ];
+
+// Verbs that CHANGE something. Kept disjoint from READ_VERBS, and deliberately
+// free of tokens that are also command GROUP names in either CLI (`run`,
+// `config`, `compute`, `storage`, `account`, `group`, `secrets`, …) — a group
+// name matching here would misclassify every read under that group.
+const MUTATE_VERBS = [
+  'create', 'delete', 'remove', 'update', 'deploy', 'apply', 'patch', 'replace',
+  'add', 'set', 'enable', 'disable', 'start', 'stop', 'restart', 'restore',
+  'rollback', 'promote', 'scale', 'resize', 'attach', 'detach', 'grant',
+  'revoke', 'import', 'submit', 'push', 'publish', 'install', 'uninstall',
+  'upgrade', 'downgrade', 'migrate', 'move', 'clone', 'copy', 'rename', 'reset',
+  'rotate', 'renew', 'purge', 'clear', 'unset', 'undeploy', 'cancel', 'abort',
+  'kill', 'terminate', 'destroy', 'drain', 'failover', 'swap', 'activate',
+  'deactivate', 'suspend', 'resume', 'login', 'logout', 'print', 'download',
+  'access', 'generate', 'regenerate', 'refresh', 'send', 'invoke', 'execute',
+  'exec', 'ssh', 'scp', 'connect', 'disconnect', 'build', 'init', 'detach-disk',
+];
+
+// gcloud/az global options that consume the NEXT token as their value. Stripping
+// them keeps a leading `--output json` from shifting the command path.
+const GLOBAL_VALUE_FLAGS = new Set([
+  '--output', '-o', '--format', '--project', '--subscription', '--query',
+  '--verbosity', '--configuration', '--account', '--billing-project',
+  '--impersonate-service-account', '--access-token-file', '--flags-file',
+]);
+
+/** argv minus flags and the values those global flags consume. */
+export function commandPositionals(args: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (!a.startsWith('-')) {
+      out.push(a);
+      continue;
+    }
+    if (a.includes('=')) continue;
+    if (GLOBAL_VALUE_FLAGS.has(a)) i++;
+  }
+  return out;
+}
+
+function matches(tok: string, verbs: string[]): boolean {
+  return verbs.some((v) => tok === v || tok.startsWith(v + '-'));
+}
 
 // Anything that would hand the model a credential or secret VALUE. Matched as a
 // space-joined prefix of the positional tokens.
@@ -78,23 +121,37 @@ export interface CloudCommandClass {
   group: string;
 }
 
-/** Classify a gcloud/az invocation (args after the binary name). */
+/**
+ * Classify a gcloud/az invocation (args after the binary name).
+ *
+ * This is the ONLY thing between the model and the deny/approve/execute
+ * decision, and the model chooses every token, so both checks are written to
+ * survive a hostile argument order:
+ *
+ * - Denials match the sequence ANYWHERE in the command path, not just as a
+ *   prefix, so a leading global flag cannot slip past them.
+ * - Read/mutate is decided by the FIRST action verb in the path. Both CLIs put
+ *   the command path before its arguments, so the first verb is the real one —
+ *   a resource merely *named* `test` or `get-orders` can no longer make
+ *   `delete` look like a read and skip the approval gate entirely.
+ * - Anything with no recognised verb falls through to `mutate` (fail closed).
+ */
 export function classifyCloud(cloud: CloudId, args: string[]): CloudCommandClass {
-  const positional = args.filter((a) => !a.startsWith('-'));
-  const joined = positional.join(' ');
+  const positional = commandPositionals(args);
+  const group = positional[0] ?? '';
   for (const seq of DENIED_SEQUENCES[cloud]) {
-    if (joined === seq || joined.startsWith(seq + ' ')) {
-      return { kind: 'denied', verb: seq, group: positional[0] ?? '' };
+    const seqTokens = seq.split(' ');
+    for (let i = 0; i + seqTokens.length <= positional.length; i++) {
+      if (seqTokens.every((t, j) => positional[i + j] === t)) {
+        return { kind: 'denied', verb: seq, group };
+      }
     }
   }
-  // The action verb is the last positional that looks like a verb; commands
-  // like `az vm list --output table` or `gcloud compute instances describe x`
-  // put resource names after the verb, so scan every positional.
-  const isRead = positional.some((tok) =>
-    READ_VERBS.some((v) => tok === v || tok.startsWith(v + '-')),
-  );
-  const verb = positional[positional.length - 1] ?? '';
-  return { kind: isRead ? 'read' : 'mutate', verb, group: positional[0] ?? '' };
+  for (const tok of positional) {
+    if (matches(tok, READ_VERBS)) return { kind: 'read', verb: tok, group };
+    if (matches(tok, MUTATE_VERBS)) return { kind: 'mutate', verb: tok, group };
+  }
+  return { kind: 'mutate', verb: positional[positional.length - 1] ?? '', group };
 }
 
 export interface CloudCliResult {

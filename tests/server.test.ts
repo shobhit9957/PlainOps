@@ -63,4 +63,40 @@ describe('server routes', () => {
     expect(getSecret('MY_TOKEN')).toBe('zzzsecretvalue123');
     expect(JSON.stringify(readAudit())).not.toContain('zzzsecretvalue123');
   });
+
+  // The agent asked for secret X. If the POST resolves prompt X while storing
+  // secret Y, the agent is told "X is saved" and downstream steps read a stale
+  // or absent X. The prompt and the payload must agree.
+  it('refuses to resolve a secret prompt with a different secret name', async () => {
+    process.env.PLAINOPS_GATE_TIMEOUT_MS = '5000';
+    const { createServer } = await import('../src/server.js');
+    const { requestSecretValue } = await import('../src/gate.js');
+    const { getSecret } = await import('../src/vault.js');
+    const { onBus } = await import('../src/bus.js');
+    const app = createServer();
+
+    let promptId = '';
+    const off = onBus((e) => {
+      if (e.type === 'secret.request' && typeof e.id === 'string') promptId = e.id;
+    });
+
+    let settled: boolean | null = null;
+    const pending = requestSecretValue('proj', 'DATABASE_URL').then((ok) => (settled = ok));
+    off();
+
+    const res = await request(app)
+      .post('/api/secret')
+      .send({ promptId, projectName: 'proj', name: 'OTHER_KEY', value: 'zzzsecretvalue123' });
+
+    expect(res.status).toBe(400);
+    expect(getSecret('OTHER_KEY')).toBeNull(); // nothing stored under the wrong name
+    expect(settled).toBeNull(); // prompt still pending, not falsely satisfied
+
+    // The name the agent actually asked for settles it.
+    await request(app)
+      .post('/api/secret')
+      .send({ promptId, projectName: 'proj', name: 'DATABASE_URL', value: 'zzzsecretvalue123' })
+      .expect(200);
+    expect(await pending).toBe(true);
+  });
 });

@@ -798,7 +798,11 @@ async function dispatchRaw(
       }
       emitLog(`$ ${pretty}`);
       auditLog({ type: 'aws.cli', summary: pretty });
-      const res = await runAwsCli(finalArgs);
+      // An approved mutation is a mutating pipeline like any other: run it under
+      // the same lock, so it cannot interleave with an in-flight tofu apply.
+      const res = cls.kind === 'mutate'
+        ? await withActionLock(() => runAwsCli(finalArgs))
+        : await runAwsCli(finalArgs);
       const out = (res.stdout || res.stderr || '(no output)').trim();
       const capped = out.length > 6000 ? out.slice(0, 6000) + '\n…(truncated)' : out;
       if (res.code !== 0) return `Command exited with code ${res.code}:\n${capped}`;
@@ -1128,7 +1132,10 @@ async function dispatchRaw(
       }
       emitLog(`$ ${pretty}`);
       auditLog({ type: `${cloud}.cli`, summary: pretty });
-      const res = await runCloudCli(cloud, finalArgs);
+      // Approved mutations share the deploy lock — see the aws_cli case above.
+      const res = cls.kind === 'mutate'
+        ? await withActionLock(() => runCloudCli(cloud, finalArgs))
+        : await runCloudCli(cloud, finalArgs);
       const out = (res.stdout || res.stderr || '(no output)').trim();
       const capped = out.length > 6000 ? out.slice(0, 6000) + '\n…(truncated)' : out;
       if (res.code !== 0) return `Command exited with code ${res.code}:\n${capped}`;

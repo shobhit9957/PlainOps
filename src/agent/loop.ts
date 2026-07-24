@@ -4,7 +4,7 @@ import { getProject } from '../state.js';
 import { loadConfig } from '../config.js';
 import { systemPrompt } from './prompt.js';
 import { TOOL_DEFINITIONS, dispatchTool, type ToolContext } from './tools.js';
-import { scrub } from '../scrub.js';
+import { scrub, createDeltaScrubber } from '../scrub.js';
 import { explainError } from '../errors.js';
 import { activeAI, aiErrorHint } from './providers.js';
 import { runOpenAiCompatTurn } from './openaicompat.js';
@@ -123,6 +123,14 @@ async function processOneMessage(
     let toolUses: Array<{ id: string; name: string; input: unknown }>;
     let stoppedForTools: boolean;
 
+    // Scrubbing each delta on its own misses a secret split across two chunks —
+    // neither half matches. The stream scrubber holds back a tail until it can
+    // see any value whole.
+    const deltas = createDeltaScrubber();
+    const emitDelta = (text: string) => {
+      if (text) emitBus({ type: 'chat.delta', projectName, text });
+    };
+
     if (ai.provider.kind === 'anthropic') {
       const client = getClient();
       const stream = client.messages.stream({
@@ -134,10 +142,11 @@ async function processOneMessage(
       });
 
       stream.on('text', (delta: string) => {
-        emitBus({ type: 'chat.delta', projectName, text: scrub(delta) });
+        emitDelta(deltas.push(delta));
       });
 
       const message = await stream.finalMessage();
+      emitDelta(deltas.flush());
       history.push({ role: 'assistant', content: message.content });
 
       assistantText = message.content
@@ -153,8 +162,9 @@ async function processOneMessage(
         system,
         history,
         tools: TOOL_DEFINITIONS,
-        onDelta: (delta) => emitBus({ type: 'chat.delta', projectName, text: scrub(delta) }),
+        onDelta: (delta) => emitDelta(deltas.push(delta)),
       });
+      emitDelta(deltas.flush());
       history.push({ role: 'assistant', content: r.assistantBlocks });
       assistantText = r.text;
       toolUses = r.toolUses;

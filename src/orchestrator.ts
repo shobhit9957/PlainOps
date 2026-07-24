@@ -40,6 +40,7 @@ export interface OrchestratorDeps {
   waitServiceStable: typeof waitServiceStable;
   putAppSecret: typeof putAppSecret;
   getSecretValueRaw: typeof getSecretValueRaw;
+  deployStaticSite: typeof deployStaticSite;
   healthFetch: (url: string) => Promise<number>;
 }
 
@@ -59,6 +60,7 @@ export const defaultDeps: OrchestratorDeps = {
   waitServiceStable,
   putAppSecret,
   getSecretValueRaw,
+  deployStaticSite,
   healthFetch: async (url) => {
     const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(10_000) });
     return res.status;
@@ -231,12 +233,36 @@ export async function deployStatic(
   sourceDir: string,
   onEvent: EventSink,
   deps: OrchestratorDeps = defaultDeps,
+  attempts = 18,
+  intervalMs = 10_000,
 ): Promise<string> {
   const project = requireProject(name);
   const { accountId } = await deps.whoAmI(project.region);
   const bucket = staticBucketName(name, accountId);
   const log = (line: string) => progress(onEvent, name, line);
-  const res = await deployStaticSite(project.region, bucket, sourceDir, log);
+  const res = await deps.deployStaticSite(project.region, bucket, sourceDir, log);
+
+  // Same rule as every other deploy path: "live" is a measured fact. A website
+  // bucket can exist and still 404 (no index.html) or 403 (policy not effective
+  // yet), and the endpoint takes a moment to start serving after creation.
+  log('Testing the live URL like a real user (must return HTTP 200 before I call it live)…');
+  const check = await validateLive(res.url, deps, log, attempts, intervalMs);
+  if (!check.ok) {
+    upsertProject({
+      ...requireProject(name),
+      accountId,
+      status: 'provisioned',
+      siteBucket: res.bucket,
+      siteUrl: res.url,
+    });
+    emitBus({ type: 'status.update', projectName: name });
+    throw new Error(
+      `The bucket is up but the site is not serving yet — ${res.url} returned ${check.detail}. ` +
+        `Usually this means index.html is missing at the root, or the public-read policy has not taken ` +
+        `effect yet. I did NOT mark this live.`,
+    );
+  }
+
   upsertProject({
     ...requireProject(name),
     accountId,
